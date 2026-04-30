@@ -300,10 +300,6 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
      SCREEN 1 — ALL LISTS
 ═══════════════════════════════════════ -->
 <div class="screen" id="lists-screen">
-  <div class="statusbar">
-    <span id="clock1">9:41</span>
-    <div style="display:flex;gap:6px;align-items:center"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-  </div>
   <div class="header" style="padding:28px 24px 8px;flex-shrink:0">
     <h1 style="font-size:34px;font-weight:700;letter-spacing:-1px">Make a List</h1>
     <div style="margin-top:4px;font-size:14px;color:rgba(255,255,255,0.4)" id="lists-subtitle">0 lists</div>
@@ -340,10 +336,6 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
      SCREEN 2 — LIST DETAIL
 ═══════════════════════════════════════ -->
 <div class="screen hidden" id="detail-screen">
-  <div class="statusbar">
-    <span id="clock2">9:41</span>
-    <div style="display:flex;gap:6px;align-items:center"><span>●●●</span><span>WiFi</span><span>🔋</span></div>
-  </div>
   <div class="navbar">
     <button class="back-btn" onclick="goBack()">
       <svg width="10" height="16" viewBox="0 0 10 16" fill="none"><path d="M8 2L2 8L8 14" stroke="#007aff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -450,8 +442,32 @@ const DEFAULT_LISTS = [];
 // ══════════════════════════════════════════
 //  PERSISTENCE
 // ══════════════════════════════════════════
+// Auto-backup timer
+let autoBackupTimer = null;
+function scheduleAutoBackup() {
+  if (!dbxToken) return; // only if connected
+  clearTimeout(autoBackupTimer);
+  autoBackupTimer = setTimeout(async () => {
+    try {
+      await fetch('https://content.dropboxapi.com/2/files/upload', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${dbxToken}`,
+          'Dropbox-API-Arg': JSON.stringify({path: DROPBOX_BACKUP_PATH, mode:'overwrite', autorename:false, mute:true}),
+          'Content-Type': 'application/octet-stream',
+        },
+        body: JSON.stringify({lists, nextListId, nextItemId, savedAt: new Date().toISOString()}),
+      });
+      // Show a subtle "auto-saved" indicator in the navbar
+      const lbl = document.getElementById('dbx-btn-label');
+      if (lbl) { lbl.textContent = '✓'; setTimeout(() => { lbl.textContent = '●'; }, 2000); }
+    } catch(e) {} // silent fail — user can always manually backup
+  }, 3000); // 3 seconds after last change
+}
+
 function save() {
   try { localStorage.setItem('mylists_data', JSON.stringify({lists,nextListId,nextItemId})); } catch(e){}
+  scheduleAutoBackup();
 }
 function load() {
   try {
@@ -470,16 +486,6 @@ function load() {
 }
 
 // ══════════════════════════════════════════
-//  CLOCK
-// ══════════════════════════════════════════
-function updateClock() {
-  const t = new Date();
-  const s = t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
-  document.getElementById('clock1').textContent = s;
-  document.getElementById('clock2').textContent = s;
-}
-updateClock(); setInterval(updateClock,10000);
-
 // ══════════════════════════════════════════
 //  UTILS
 // ══════════════════════════════════════════
@@ -1102,7 +1108,8 @@ function renderDbxPanel(){
     const msg=dbxMessage?`<div class="dbx-notice ${dbxStatus==='error'?'error':'info'}">${esc(dbxMessage)}</div>`:'';
     html=`<div class="dbx-notice success"><div class="green-dot"></div><span>Connected to Dropbox</span></div>
     ${msg}
-    <button class="primary-btn" onclick="handleBackup()" ${busy?'disabled':''}>${dbxStatus==='saving'?'Saving…':'☁️  Save all lists'}</button>
+    <button class="primary-btn" onclick="handleBackup()" ${busy?'disabled':''}>${dbxStatus==='saving'?'Saving…':'☁️  Save now'}</button>
+      <div style="text-align:center;font-size:12px;color:rgba(255,255,255,0.35);margin-top:-4px;margin-bottom:16px">Auto-saves 3 seconds after every change</div>
     <button class="secondary-btn" onclick="handleRestore()" ${busy?'disabled':''}>${dbxStatus==='restoring'?'Restoring…':'⬇️  Restore from Dropbox'}</button>
     <div class="dbx-path-note">Saved to <code>${DROPBOX_BACKUP_PATH}</code> in your Dropbox.</div>
     <button class="disconnect-btn" onclick="handleDisconnect()">Disconnect Dropbox</button>`;
