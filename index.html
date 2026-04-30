@@ -300,9 +300,21 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
      SCREEN 1 — ALL LISTS
 ═══════════════════════════════════════ -->
 <div class="screen" id="lists-screen">
-  <div class="header" style="padding:28px 24px 8px;flex-shrink:0">
-    <h1 style="font-size:34px;font-weight:700;letter-spacing:-1px">Make a List</h1>
-    <div style="margin-top:4px;font-size:14px;color:rgba(255,255,255,0.4)" id="lists-subtitle">0 lists</div>
+  <div class="header" style="padding:28px 24px 8px;flex-shrink:0;display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <h1 style="font-size:34px;font-weight:700;letter-spacing:-1px">Make a List</h1>
+      <div style="margin-top:4px;font-size:14px;color:rgba(255,255,255,0.4)" id="lists-subtitle">0 lists</div>
+    </div>
+    <button class="dbx-nav-btn" id="dbx-open-btn-home" onclick="openDbxPanel()" style="margin-top:8px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+        <path d="M6 2L12 6.5L6 11L0 6.5L6 2Z" fill="currentColor"/>
+        <path d="M18 2L24 6.5L18 11L12 6.5L18 2Z" fill="currentColor"/>
+        <path d="M0 13.5L6 9L12 13.5L6 18L0 13.5Z" fill="currentColor"/>
+        <path d="M24 13.5L18 9L12 13.5L18 18L24 13.5Z" fill="currentColor"/>
+        <path d="M6 19.5L12 15L18 19.5L12 24L6 19.5Z" fill="currentColor"/>
+      </svg>
+      <span id="dbx-home-label">Backup</span>
+    </button>
   </div>
 
   <!-- Search bar -->
@@ -553,6 +565,8 @@ function clearListsSearch(){
   document.getElementById('lists-search-clear').classList.remove('visible');
   renderListsScreen();
 }
+
+function openDbxPanel(){document.getElementById('dbx-overlay').classList.add('open');renderDbxPanel();}
 
 function renderListsScreen() {
   // Sort by createdAt ascending (oldest first = order added)
@@ -1085,7 +1099,18 @@ async function handleRestore(){
   renderDbxPanel();
 }
 function handleDisconnect(){sessionStorage.removeItem('dbx_token');dbxToken=null;dbxStatus=null;dbxMessage='';renderDbxPanel();}
-function openDbxPanel(){document.getElementById('dbx-overlay').classList.add('open');renderDbxPanel();}
+function updateDbxButtons() {
+  // Detail screen button
+  const lbl = document.getElementById('dbx-btn-label');
+  const btn = document.getElementById('dbx-open-btn');
+  if (lbl) lbl.textContent = dbxToken ? '●' : 'Backup';
+  if (btn) btn.classList.toggle('connected', !!dbxToken);
+  // Home screen button
+  const homeLbl = document.getElementById('dbx-home-label');
+  const homeBtn = document.getElementById('dbx-open-btn-home');
+  if (homeLbl) homeLbl.textContent = dbxToken ? '●' : 'Backup';
+  if (homeBtn) homeBtn.classList.toggle('connected', !!dbxToken);
+}
 function closeDbxPanel(){document.getElementById('dbx-overlay').classList.remove('open');}
 function dbxOverlayClick(e){if(e.target===document.getElementById('dbx-overlay'))closeDbxPanel();}
 
@@ -1115,6 +1140,7 @@ function renderDbxPanel(){
     <button class="disconnect-btn" onclick="handleDisconnect()">Disconnect Dropbox</button>`;
   }
   body.innerHTML=html;
+  updateDbxButtons();
 }
 
 // ══════════════════════════════════════════
@@ -1132,6 +1158,7 @@ function renderDbxPanel(){
 // ══════════════════════════════════════════
 load();
 showListsScreen();
+updateDbxButtons();
 </script>
 </body>
 </html>
