@@ -454,27 +454,79 @@ const DEFAULT_LISTS = [];
 // ══════════════════════════════════════════
 //  PERSISTENCE
 // ══════════════════════════════════════════
+
+// Upload a single file to Dropbox
+async function dbxUpload(path, content, isText) {
+  return fetch('https://content.dropboxapi.com/2/files/upload', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${dbxToken}`,
+      'Dropbox-API-Arg': JSON.stringify({path, mode:'overwrite', autorename:false, mute:true}),
+      'Content-Type': 'application/octet-stream',
+    },
+    body: isText ? content : JSON.stringify(content),
+  });
+}
+
+// Delete a file from Dropbox (used when a list is deleted)
+async function dbxDelete(path) {
+  return fetch('https://api.dropboxapi.com/2/files/delete_v2', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${dbxToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({path}),
+  }).catch(()=>{});
+}
+
+// Format a list as a readable plain text file
+function listToText(list) {
+  const date = new Date(list.createdAt||Date.now()).toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'});
+  const active = list.items.filter(i=>!i.done);
+  const done   = list.items.filter(i=> i.done);
+  let txt = `${list.icon}  ${list.name}\n`;
+  txt += `Created: ${date}\n`;
+  txt += `${'─'.repeat(30)}\n\n`;
+  if (active.length) {
+    active.forEach(i => { txt += `☐  ${i.text || '(image item)'}\n`; });
+  }
+  if (done.length) {
+    txt += `\n── Completed ──\n`;
+    done.forEach(i => { txt += `☑  ${i.text || '(image item)'}\n`; });
+  }
+  if (!list.items.length) txt += '(empty list)\n';
+  txt += `\n${'─'.repeat(30)}\n`;
+  txt += `Backed up: ${new Date().toLocaleString()}\n`;
+  return txt;
+}
+
+// Safe filename from list name
+function safeFilename(name) {
+  return name.replace(/[^a-zA-Z0-9 _-]/g,'').trim().replace(/\s+/g,' ') || 'list';
+}
+
 // Auto-backup timer
 let autoBackupTimer = null;
 function scheduleAutoBackup() {
-  if (!dbxToken) return; // only if connected
+  if (!dbxToken) return;
   clearTimeout(autoBackupTimer);
   autoBackupTimer = setTimeout(async () => {
     try {
-      await fetch('https://content.dropboxapi.com/2/files/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${dbxToken}`,
-          'Dropbox-API-Arg': JSON.stringify({path: DROPBOX_BACKUP_PATH, mode:'overwrite', autorename:false, mute:true}),
-          'Content-Type': 'application/octet-stream',
-        },
-        body: JSON.stringify({lists, nextListId, nextItemId, savedAt: new Date().toISOString()}),
-      });
-      // Show a subtle "auto-saved" indicator in the navbar
+      // 1. Save the machine-readable restore file
+      await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
+      // 2. Save each list as a readable .txt file
+      for (const list of lists) {
+        const fname = `/Lists/${safeFilename(list.name)}.txt`;
+        await dbxUpload(fname, listToText(list), true);
+      }
+      // Show confirmation
       const lbl = document.getElementById('dbx-btn-label');
+      const homeLbl = document.getElementById('dbx-home-label');
       if (lbl) { lbl.textContent = '✓'; setTimeout(() => { lbl.textContent = '●'; }, 2000); }
-    } catch(e) {} // silent fail — user can always manually backup
-  }, 3000); // 3 seconds after last change
+      if (homeLbl) { homeLbl.textContent = '✓'; setTimeout(() => { homeLbl.textContent = '●'; }, 2000); }
+    } catch(e) {}
+  }, 3000);
 }
 
 function save() {
@@ -1067,12 +1119,14 @@ function startDropboxOAuth(){
 async function handleBackup(){
   dbxStatus='saving';dbxMessage='Saving to Dropbox…';renderDbxPanel();
   try{
-    const res=await fetch('https://content.dropboxapi.com/2/files/upload',{
-      method:'POST',
-      headers:{'Authorization':`Bearer ${dbxToken}`,'Dropbox-API-Arg':JSON.stringify({path:DROPBOX_BACKUP_PATH,mode:'overwrite',autorename:false,mute:true}),'Content-Type':'application/octet-stream'},
-      body:JSON.stringify({lists,nextListId,nextItemId,savedAt:new Date().toISOString()}),
-    });
+    // 1. Save machine-readable restore file
+    const res=await dbxUpload(DROPBOX_BACKUP_PATH, {lists,nextListId,nextItemId,savedAt:new Date().toISOString()});
     if(!res.ok) throw new Error(await res.text());
+    // 2. Save each list as a readable .txt file in a Lists/ folder
+    for(const list of lists){
+      const fname=`/Lists/${safeFilename(list.name)}.txt`;
+      await dbxUpload(fname, listToText(list), true);
+    }
     dbxStatus='saved';dbxMessage='✓ Saved to Dropbox!';
     setTimeout(()=>{dbxStatus=null;dbxMessage='';renderDbxPanel();},3000);
   }catch(err){dbxStatus='error';dbxMessage='Error: '+err.message;}
