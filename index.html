@@ -107,8 +107,26 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 .list-card-chevron{color:rgba(255,255,255,0.25);font-size:18px;flex-shrink:0}
 /* Swipe-delete styles removed */
 
-
-/* New list button */
+/* List card swipe-to-delete */
+.lc-wrap{position:relative;margin-bottom:12px;border-radius:18px;overflow:hidden}
+.lc-del-bg{
+  position:absolute;right:0;top:0;bottom:0;width:90px;
+  background:#ff3b30;display:flex;align-items:center;justify-content:center;
+  border-radius:0 18px 18px 0;
+  opacity:0;transition:opacity 0.15s;
+}
+.lc-del-bg span{color:#fff;font-size:13px;font-weight:700;letter-spacing:0.2px}
+.list-card{
+  display:flex;align-items:center;gap:14px;
+  background:rgba(255,255,255,0.07);
+  border:1.5px solid rgba(255,255,255,0.08);
+  border-radius:18px;margin-bottom:0;
+  padding:18px 16px;cursor:pointer;
+  transition:background 0.15s;
+  animation:rowIn 0.2s ease;
+  position:relative;will-change:transform;
+}
+.list-card:active{background:rgba(255,255,255,0.13)}
 #new-list-btn{
   margin:8px 16px 0;flex-shrink:0;
   background:linear-gradient(135deg,#007aff,#5856d6);
@@ -332,21 +350,21 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
       Lists
     </button>
     <div class="navbar-title" id="navbar-title"></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="dbx-nav-btn" id="dbx-open-btn" onclick="openDbxPanel()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 2L12 6.5L6 11L0 6.5L6 2Z" fill="currentColor"/><path d="M18 2L24 6.5L18 11L12 6.5L18 2Z" fill="currentColor"/><path d="M0 13.5L6 9L12 13.5L6 18L0 13.5Z" fill="currentColor"/><path d="M24 13.5L18 9L12 13.5L18 18L24 13.5Z" fill="currentColor"/><path d="M6 19.5L12 15L18 19.5L12 24L6 19.5Z" fill="currentColor"/></svg>
-        <span id="dbx-btn-label">Backup</span>
-      </button>
-      <button class="more-btn" onclick="openListMenu()" title="More options">
-        <span>•••</span>
-      </button>
-    </div>
+    <button class="dbx-nav-btn" id="dbx-open-btn" onclick="openDbxPanel()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 2L12 6.5L6 11L0 6.5L6 2Z" fill="currentColor"/><path d="M18 2L24 6.5L18 11L12 6.5L18 2Z" fill="currentColor"/><path d="M0 13.5L6 9L12 13.5L6 18L0 13.5Z" fill="currentColor"/><path d="M24 13.5L18 9L12 13.5L18 18L24 13.5Z" fill="currentColor"/><path d="M6 19.5L12 15L18 19.5L12 24L6 19.5Z" fill="currentColor"/></svg>
+      <span id="dbx-btn-label">Backup</span>
+    </button>
   </div>
 
   <div class="list-hero">
     <div class="list-hero-icon" id="hero-icon"></div>
     <h1 id="hero-title"></h1>
     <div class="sub" id="hero-sub"></div>
+  </div>
+
+  <!-- ••• button sits right-aligned above search -->
+  <div style="display:flex;justify-content:flex-end;padding:0 16px 6px">
+    <button class="more-btn" onclick="openListMenu()" title="More options">•••</button>
   </div>
 
   <div class="search-wrap">
@@ -373,6 +391,10 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
   <div id="list-menu-sheet" onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
     <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
       <div id="list-menu-title" style="padding:14px 16px 10px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)"></div>
+      <button id="clear-completed-btn" onclick="clearCompleted()" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4" stroke="#34c759" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="#34c759" stroke-width="2"/></svg>
+        Clear Completed
+      </button>
       <button onclick="confirmDeleteList()" style="width:100%;padding:16px;background:none;border:none;cursor:pointer;color:#ff3b30;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="#ff3b30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Delete List
@@ -553,15 +575,30 @@ function renderListsScreen() {
     const countStr = total === 0 ? 'Empty' : remaining + ' of ' + total + ' remaining';
     const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '';
     return `
-    <div class="list-card" id="lc-${l.id}" onclick="openList(${l.id})">
-      <div class="list-card-icon" style="background:rgba(255,255,255,0.08)">${esc(l.icon)}</div>
-      <div class="list-card-info">
-        <div class="list-card-name">${esc(l.name)}</div>
-        <div class="list-card-count">${countStr}${dateStr ? ' · ' + dateStr : ''}</div>
+    <div class="lc-wrap" id="lcw-${l.id}">
+      <div class="lc-del-bg">
+        <span>Delete</span>
       </div>
-      <div class="list-card-chevron">›</div>
+      <div class="list-card" id="lc-${l.id}" onclick="lcTap(event,${l.id})">
+        <div class="list-card-icon" style="background:rgba(255,255,255,0.08)">${esc(l.icon)}</div>
+        <div class="list-card-info">
+          <div class="list-card-name">${esc(l.name)}</div>
+          <div class="list-card-count">${countStr}${dateStr ? ' · ' + dateStr : ''}</div>
+        </div>
+        <div class="list-card-chevron">›</div>
+      </div>
     </div>`;
   }).join('');
+
+  // Attach swipe listeners after render
+  filtered.forEach(l => {
+    const card = document.getElementById('lc-' + l.id);
+    if (card) {
+      card.addEventListener('touchstart', e => lcSwipeStart(e, l.id), {passive:true});
+      card.addEventListener('touchmove',  e => lcSwipeMove(e, l.id),  {passive:false});
+      card.addEventListener('touchend',   e => lcSwipeEnd(e, l.id));
+    }
+  });
 }
 
 // New list modal
@@ -589,6 +626,97 @@ function createList(){
   lists.push({ id:nextListId++, name, icon:selectedEmoji, items:[], createdAt: Date.now() });
   save(); closeNewListModal(); renderListsScreen();
 }
+// ── List card swipe-to-delete ─────────────────────────────────────────────────
+const lcSwipeState = {};
+
+function lcTap(e, id) {
+  // If card was swiped open, first tap snaps it shut
+  const s = lcSwipeState[id];
+  if (s && s.open) {
+    lcSnapShut(id);
+    e.stopPropagation();
+    return;
+  }
+  openList(id);
+}
+
+function lcSwipeStart(e, id) {
+  // Close any other open cards first
+  Object.keys(lcSwipeState).forEach(k => {
+    if (parseInt(k) !== id && lcSwipeState[k].open) lcSnapShut(parseInt(k));
+  });
+  lcSwipeState[id] = {
+    startX: e.touches[0].clientX,
+    startY: e.touches[0].clientY,
+    dx: 0, open: false, cancelled: false, locked: false
+  };
+}
+
+function lcSwipeMove(e, id) {
+  const s = lcSwipeState[id];
+  if (!s || s.cancelled) return;
+  const dx = e.touches[0].clientX - s.startX;
+  const dy = e.touches[0].clientY - s.startY;
+  if (!s.locked && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 6) { s.cancelled = true; return; }
+  if (dx > 0) return;
+  if (Math.abs(dx) > 5) s.locked = true;
+  if (!s.locked) return;
+  e.preventDefault();
+  s.dx = dx;
+  const card = document.getElementById('lc-' + id);
+  const wrap = document.getElementById('lcw-' + id);
+  const bg   = wrap ? wrap.querySelector('.lc-del-bg') : null;
+  if (card) {
+    card.style.transition = 'none';
+    card.style.transform = `translateX(${Math.max(dx, -90)}px)`;
+  }
+  if (bg) {
+    // Fade in red as card slides, fully visible at 90px
+    bg.style.opacity = Math.min(Math.abs(dx) / 60, 1);
+  }
+}
+
+function lcSwipeEnd(e, id) {
+  const s = lcSwipeState[id];
+  if (!s) return;
+  const card = document.getElementById('lc-' + id);
+  const wrap = document.getElementById('lcw-' + id);
+  const bg   = wrap ? wrap.querySelector('.lc-del-bg') : null;
+  if (!s.cancelled && s.dx < -40) {
+    if (card) { card.style.transition = 'transform 0.22s ease'; card.style.transform = 'translateX(-90px)'; }
+    if (bg)   { bg.style.transition = 'opacity 0.22s'; bg.style.opacity = '1'; }
+    s.open = true;
+  } else {
+    lcSnapShut(id);
+  }
+}
+
+function lcSnapShut(id) {
+  const card = document.getElementById('lc-' + id);
+  const wrap = document.getElementById('lcw-' + id);
+  const bg   = wrap ? wrap.querySelector('.lc-del-bg') : null;
+  if (card) { card.style.transition = 'transform 0.22s ease'; card.style.transform = ''; }
+  if (bg)   { bg.style.transition = 'opacity 0.22s'; bg.style.opacity = '0'; }
+  if (lcSwipeState[id]) lcSwipeState[id].open = false;
+}
+
+function deleteListById(id) {
+  const wrap = document.getElementById('lcw-' + id);
+  if (wrap) { wrap.style.transition = 'opacity 0.2s, max-height 0.25s'; wrap.style.opacity = '0'; wrap.style.maxHeight = '0'; wrap.style.overflow = 'hidden'; }
+  setTimeout(() => { deleteList(id); }, 240);
+}
+
+// Override lc-del-bg click — need to wire after render in renderListsScreen
+// We use event delegation on the container instead
+document.addEventListener('click', e => {
+  const bg = e.target.closest('.lc-del-bg');
+  if (!bg) return;
+  const wrap = bg.closest('.lc-wrap');
+  if (!wrap) return;
+  const id = parseInt(wrap.id.replace('lcw-', ''));
+  deleteListById(id);
+});
+
 function deleteList(id){
   lists = lists.filter(l=>l.id!==id);
   save(); renderListsScreen();
@@ -597,10 +725,23 @@ function deleteList(id){
 function openListMenu(){
   const list = activeList(); if(!list) return;
   document.getElementById('list-menu-title').textContent = list.name;
+  // Show "Clear Completed" only if there are completed items
+  const hasCompleted = list.items.some(i => i.done);
+  const clearBtn = document.getElementById('clear-completed-btn');
+  clearBtn.style.display = hasCompleted ? 'flex' : 'none';
   const overlay = document.getElementById('list-menu-overlay');
   overlay.style.display = 'flex';
   overlay.style.alignItems = 'flex-end';
   overlay.style.justifyContent = 'center';
+}
+
+function clearCompleted(){
+  const list = activeList(); if(!list) return;
+  const count = list.items.filter(i => i.done).length;
+  list.items = list.items.filter(i => !i.done);
+  save();
+  closeListMenu();
+  renderDetailScreen();
 }
 function closeListMenu(){
   document.getElementById('list-menu-overlay').style.display = 'none';
