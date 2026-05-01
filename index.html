@@ -88,7 +88,7 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 #lists-screen .header .sub{margin-top:4px;font-size:14px;color:rgba(255,255,255,0.4)}
 
 /* List cards */
-#lists-container{flex:1;overflow-y:auto;padding:0 16px;-webkit-overflow-scrolling:touch}
+#lists-container{padding:0;}
 .list-card{
   display:flex;align-items:center;gap:14px;
   background:rgba(255,255,255,0.07);
@@ -128,13 +128,14 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 }
 .list-card:active{background:rgba(255,255,255,0.13)}
 #new-list-btn{
-  margin:8px 16px 0;flex-shrink:0;
+  margin:0;flex-shrink:0;
   background:linear-gradient(135deg,#007aff,#5856d6);
   border:none;border-radius:16px;padding:16px;
   color:#fff;font-size:16px;font-weight:600;cursor:pointer;
   display:flex;align-items:center;justify-content:center;gap:8px;
   box-shadow:0 4px 20px rgba(0,122,255,0.35);
   transition:transform 0.12s;
+  width:100%;box-sizing:border-box;
 }
 #new-list-btn:active{transform:scale(0.97)}
 
@@ -290,7 +291,7 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 .dbx-path-note{color:rgba(255,255,255,0.3);font-size:12px;margin-bottom:14px;line-height:1.5}
 .dbx-path-note code{color:rgba(255,255,255,0.5)}
 .green-dot{width:8px;height:8px;border-radius:50%;background:#34c759;flex-shrink:0}
-.more-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:5px 10px;cursor:pointer;color:rgba(255,255,255,0.6);font-size:11px;letter-spacing:1px;line-height:1;transition:background 0.15s}
+.more-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:12px;padding:10px 16px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:16px;letter-spacing:2px;line-height:1;transition:background 0.15s}
 .more-btn:active{background:rgba(255,255,255,0.18)}
 </style>
 </head>
@@ -317,18 +318,28 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
     </button>
   </div>
 
-  <!-- Search bar -->
-  <div class="search-wrap" style="margin:4px 16px 0;padding:0">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="left:12px"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
-    <input type="text" id="lists-search-input" placeholder="Search lists…" oninput="onListsSearch(this)" style="padding-left:36px;padding-right:36px"/>
-    <button class="search-clear" id="lists-search-clear" onclick="clearListsSearch()">✕</button>
-  </div>
+  <!-- Single scrollable column: search + new list + cards -->
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 0 32px;display:flex;flex-direction:column;gap:10px">
 
-  <div id="lists-container" style="flex:1;overflow-y:auto;padding:12px 16px 0;-webkit-overflow-scrolling:touch"></div>
-  <button id="new-list-btn" onclick="openNewListModal()">
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><line x1="10" y1="3" x2="10" y2="17" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="10" x2="17" y2="10" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
-    New List
-  </button>
+    <!-- Search bar -->
+    <div style="margin:0 20px;position:relative">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:0.4;pointer-events:none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <input type="text" id="lists-search-input" placeholder="Search lists…" oninput="onListsSearch(this)" style="width:100%;box-sizing:border-box;padding:10px 36px;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:15px;outline:none;"/>
+      <button class="search-clear" id="lists-search-clear" onclick="clearListsSearch()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%)">✕</button>
+    </div>
+
+    <!-- New List button -->
+    <div style="margin:0 20px">
+      <button id="new-list-btn" onclick="openNewListModal()" style="width:100%;box-sizing:border-box">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><line x1="10" y1="3" x2="10" y2="17" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="10" x2="17" y2="10" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+        New List
+      </button>
+    </div>
+
+    <!-- List cards -->
+    <div id="lists-container" style="margin:0 20px"></div>
+
+  </div>
 </div>
 
 <!-- New list modal -->
@@ -336,7 +347,10 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
   <div id="new-list-sheet">
     <div class="modal-handle"></div>
     <div class="modal-title">New List</div>
-    <input class="modal-field" id="new-list-name" placeholder="List name…" onkeydown="if(event.key==='Enter')createList()"/>
+    <input class="modal-field" id="new-list-name" placeholder="List name…"
+      onkeydown="if(event.key==='Enter')createList()"
+      onblur="createListOnBlur()"/>
+    <div style="font-size:11px;color:rgba(255,255,255,0.3);margin:-4px 0 12px;text-align:center">Press Return or ✓ to create</div>
     <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px;letter-spacing:0.5px">ICON</div>
     <div class="emoji-row" id="emoji-row"></div>
     <button class="modal-create-btn" onclick="createList()">Create List</button>
@@ -366,24 +380,29 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
     <div class="sub" id="hero-sub"></div>
   </div>
 
-  <!-- ••• button sits right-aligned above search -->
-  <div style="display:flex;justify-content:flex-end;padding:0 16px 6px">
+  <!-- ••• button on the left above search -->
+  <div style="display:flex;justify-content:flex-start;padding:0 16px 6px">
     <button class="more-btn" onclick="openListMenu()" title="More options">•••</button>
   </div>
 
-  <div class="search-wrap">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="left:28px"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
-    <input type="text" id="search-input" placeholder="Search…" oninput="onSearch(this)"/>
-    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
-  </div>
-
-  <div class="add-row">
-    <input type="text" id="task-input" placeholder="Add a new item…" onkeydown="if(event.key==='Enter')addTextTask()"/>
-    <button class="add-btn" onclick="addTextTask()">+</button>
-    <button class="img-btn" onclick="document.getElementById('file-input').click()" title="Add photo">
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="16" height="14" rx="3" stroke="white" stroke-width="1.5"/><circle cx="7" cy="8" r="1.5" fill="white"/><path d="M2 13l4-4 3 3 3-3 4 4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  <!-- Smart input row: bar + photo button outside to the right -->
+  <div style="display:flex;align-items:center;gap:8px;padding:0 12px 0 16px">
+    <div class="search-wrap" style="flex:1;margin:0;padding:0">
+      <input type="text" id="smart-input" placeholder="Search or add item…"
+        oninput="onSmartInput(this)"
+        onkeydown="if(event.key==='Enter')commitSmartInput()"
+        onblur="commitSmartInput()"
+        style="width:100%;padding-left:16px;padding-right:12px"/>
+    </div>
+    <button onclick="document.getElementById('file-input').click()" title="Add photo" style="flex-shrink:0;width:44px;height:44px;border-radius:12px;border:none;cursor:pointer;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:24px;">
+      📷
     </button>
     <input type="file" id="file-input" accept="image/*" style="display:none" onchange="addImageTask(this)"/>
+  </div>
+
+  <!-- Hint text -->
+  <div id="smart-hint" style="padding:5px 20px 0;font-size:11px;color:rgba(255,255,255,0.28);font-family:-apple-system,sans-serif;display:none">
+    Press <b style="color:rgba(255,255,255,0.45)">Return</b> or <b style="color:rgba(255,255,255,0.45)">✓</b> to add a new item
   </div>
 
   <div id="list-scroll"></div>
@@ -395,6 +414,12 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
   <div id="list-menu-sheet" onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
     <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
       <div id="list-menu-title" style="padding:14px 16px 10px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)"></div>
+      <button onclick="openRenameModal()" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
+        ✏️ Rename List
+      </button>
+      <button onclick="openSortSheet()" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
+        ↕️ Sort Items
+      </button>
       <button id="clear-completed-btn" onclick="clearCompleted()" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4" stroke="#34c759" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="#34c759" stroke-width="2"/></svg>
         Clear Completed
@@ -405,6 +430,55 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
       </button>
     </div>
     <button onclick="closeListMenu()" style="width:100%;padding:16px;background:rgba(40,44,70,0.98);border:none;border-radius:16px;cursor:pointer;color:#fff;font-size:17px;font-weight:600">Cancel</button>
+  </div>
+</div>
+
+<!-- Rename List modal -->
+<div id="rename-modal" onclick="closeRenameModal()" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
+  <div onclick="event.stopPropagation()" style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
+    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
+      <div style="padding:16px;text-align:center;color:rgba(255,255,255,0.5);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Rename List</div>
+      <div style="padding:16px">
+        <input id="rename-input" type="text" placeholder="List name…"
+          style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1.5px solid rgba(0,122,255,0.6);border-radius:12px;padding:12px 16px;color:#fff;font-size:16px;outline:none;"
+          onkeydown="if(event.key==='Enter')doRenameList()"/>
+      </div>
+      <div style="display:flex;border-top:1px solid rgba(255,255,255,0.08)">
+        <button onclick="closeRenameModal()" style="flex:1;padding:16px;background:none;border:none;border-right:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#007aff;font-size:17px">Cancel</button>
+        <button onclick="doRenameList()" style="flex:1;padding:16px;background:none;border:none;cursor:pointer;color:#007aff;font-size:17px;font-weight:700">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sort sheet -->
+<div id="sort-overlay" onclick="closeSortSheet()" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
+  <div onclick="event.stopPropagation()" style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
+    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
+      <div style="padding:14px 16px 10px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Sort Items</div>
+      <button onclick="sortItems('manual')" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">↕️ Manual Order (Default)</button>
+      <button onclick="sortItems('az')" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">🔤 A → Z</button>
+      <button onclick="sortItems('za')" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">🔤 Z → A</button>
+      <button onclick="sortItems('incomplete')" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">⭕ Incomplete First</button>
+      <button onclick="sortItems('completed')" style="width:100%;padding:16px;background:none;border:none;cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">✅ Completed First</button>
+    </div>
+    <button onclick="closeSortSheet()" style="width:100%;padding:16px;background:rgba(40,44,70,0.98);border:none;border-radius:16px;cursor:pointer;color:#fff;font-size:17px;font-weight:600">Cancel</button>
+  </div>
+</div>
+
+<!-- Delete confirmation sheet -->
+<div id="confirm-delete-overlay" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
+  <div style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
+    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px;text-align:center">
+      <div style="padding:20px 16px 4px;color:#fff;font-size:17px;font-weight:700">Delete List?</div>
+      <div style="padding:4px 16px 20px;color:rgba(255,255,255,0.5);font-size:14px">
+        "<span id="confirm-list-name"></span>" will be permanently deleted. This cannot be undone.
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,0.08);display:flex">
+        <button onclick="document.getElementById('confirm-delete-overlay').style.display='none'" style="flex:1;padding:16px;background:none;border:none;border-right:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#007aff;font-size:17px;font-weight:400">Cancel</button>
+        <button onclick="doDeleteList()" style="flex:1;padding:16px;background:none;border:none;cursor:pointer;color:#ff3b30;font-size:17px;font-weight:700">Delete</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -578,13 +652,14 @@ function openList(listId) {
   document.getElementById('lists-screen').classList.add('hidden');
   const det = document.getElementById('detail-screen');
   det.classList.remove('hidden','slide-back');
-  void det.offsetWidth; // reflow to re-trigger animation
+  void det.offsetWidth;
   det.style.animation='none'; void det.offsetWidth;
   det.style.animation='slideInRight 0.28s ease';
   search = '';
-  document.getElementById('search-input').value = '';
-  document.getElementById('search-clear').classList.remove('visible');
-  document.getElementById('search-input').classList.remove('has-text');
+  const si = document.getElementById('smart-input');
+  if(si){ si.value=''; }
+  const hint = document.getElementById('smart-hint');
+  if(hint) hint.style.display = 'none';
   renderDetailScreen();
 }
 
@@ -692,7 +767,20 @@ function selectEmoji(em){
     b.classList.toggle('selected', b.textContent===em);
   });
 }
+let _creatingList = false;
+function createListOnBlur(){
+  setTimeout(()=>{
+    if(_creatingList) return;
+    const modal = document.getElementById('new-list-modal');
+    if(!modal.classList.contains('open')) return;
+    const name = document.getElementById('new-list-name').value.trim();
+    if(name) createList();
+  }, 150);
+}
 function createList(){
+  if(_creatingList) return;
+  _creatingList = true;
+  setTimeout(()=>{ _creatingList = false; }, 300);
   const name = document.getElementById('new-list-name').value.trim();
   if(!name) return;
   lists.push({ id:nextListId++, name, icon:selectedEmoji, items:[], createdAt: Date.now() });
@@ -773,9 +861,15 @@ function lcSnapShut(id) {
 }
 
 function deleteListById(id) {
-  const wrap = document.getElementById('lcw-' + id);
-  if (wrap) { wrap.style.transition = 'opacity 0.2s, max-height 0.25s'; wrap.style.opacity = '0'; wrap.style.maxHeight = '0'; wrap.style.overflow = 'hidden'; }
-  setTimeout(() => { deleteList(id); }, 240);
+  // Show confirmation sheet
+  const list = lists.find(l => l.id === id);
+  if (!list) return;
+  document.getElementById('confirm-list-name').textContent = list.name;
+  // Store the id to delete on confirm
+  document.getElementById('confirm-delete-overlay').dataset.pendingId = id;
+  document.getElementById('confirm-delete-overlay').style.display = 'flex';
+  // Snap card back shut
+  lcSnapShut(id);
 }
 
 // Override lc-del-bg click — need to wire after render in renderListsScreen
@@ -815,17 +909,76 @@ function clearCompleted(){
   closeListMenu();
   renderDetailScreen();
 }
+// ── Rename List ───────────────────────────────────────────────────────────────
+function openRenameModal(){
+  closeListMenu();
+  const list = activeList(); if(!list) return;
+  const inp = document.getElementById('rename-input');
+  inp.value = list.name;
+  document.getElementById('rename-modal').style.display = 'flex';
+  setTimeout(() => inp.focus(), 200);
+}
+function closeRenameModal(){
+  document.getElementById('rename-modal').style.display = 'none';
+}
+function doRenameList(){
+  const list = activeList(); if(!list) return;
+  const name = document.getElementById('rename-input').value.trim();
+  if(!name) return;
+  list.name = name;
+  save();
+  closeRenameModal();
+  renderDetailScreen();
+}
+
+// ── Sort Items ────────────────────────────────────────────────────────────────
+function openSortSheet(){
+  closeListMenu();
+  document.getElementById('sort-overlay').style.display = 'flex';
+}
+function closeSortSheet(){
+  document.getElementById('sort-overlay').style.display = 'none';
+}
+function sortItems(order){
+  const list = activeList(); if(!list) return;
+  if(order === 'az'){
+    list.items.sort((a,b) => (a.text||'').localeCompare(b.text||''));
+  } else if(order === 'za'){
+    list.items.sort((a,b) => (b.text||'').localeCompare(a.text||''));
+  } else if(order === 'incomplete'){
+    list.items.sort((a,b) => a.done - b.done);
+  } else if(order === 'completed'){
+    list.items.sort((a,b) => b.done - a.done);
+  }
+  // 'manual' does nothing — keeps current order
+  save(); closeSortSheet(); renderDetailScreen();
+}
 function closeListMenu(){
   document.getElementById('list-menu-overlay').style.display = 'none';
 }
-function confirmDeleteList(){
-  const list = activeList(); if(!list) return;
-  closeListMenu();
-  // Brief pause so sheet animates out before navigating
-  setTimeout(() => {
+function doDeleteList(){
+  const overlay = document.getElementById('confirm-delete-overlay');
+  overlay.style.display = 'none';
+  // Check if called from homepage (pendingId) or from inside a list
+  const pendingId = parseInt(overlay.dataset.pendingId);
+  if (pendingId) {
+    overlay.dataset.pendingId = '';
+    const wrap = document.getElementById('lcw-' + pendingId);
+    if (wrap) { wrap.style.transition = 'opacity 0.2s, max-height 0.25s'; wrap.style.opacity = '0'; wrap.style.maxHeight = '0'; wrap.style.overflow = 'hidden'; }
+    setTimeout(() => { deleteList(pendingId); }, 240);
+  } else {
+    const list = activeList(); if(!list) return;
     deleteList(list.id);
     goBack();
-  }, 180);
+  }
+}
+function confirmDeleteList(){
+  const list = activeList(); if(!list) return;
+  document.getElementById('confirm-list-name').textContent = list.name;
+  const overlay = document.getElementById('confirm-delete-overlay');
+  overlay.dataset.pendingId = ''; // coming from inside list, not homepage
+  overlay.style.display = 'flex';
+  closeListMenu();
 }
 
 // ══════════════════════════════════════════
@@ -936,11 +1089,39 @@ function renderItemHTML(item, index, q){
 
 // ── Item operations ───────────────────────────────────────────────────────────
 function addTextTask(){
-  const inp = document.getElementById('task-input');
+  const inp = document.getElementById('smart-input');
   const text = inp.value.trim(); if(!text) return;
   const list = activeList(); if(!list) return;
   list.items.push({id:nextItemId++, text, done:false, image:null});
-  inp.value=''; save(); renderDetailScreen();
+  inp.value=''; search='';
+  save(); renderDetailScreen();
+}
+
+// ══════════════════════════════════════════
+//  SMART INPUT — search while typing, add on Return
+// ══════════════════════════════════════════
+function onSmartInput(inp){
+  search = inp.value;
+  const hint = document.getElementById('smart-hint');
+  if(hint) hint.style.display = search ? 'block' : 'none';
+  renderDetailScreen();
+}
+let _committing = false;
+function commitSmartInput(){
+  if(_committing) return;
+  _committing = true;
+  setTimeout(()=>{ _committing = false; }, 300);
+  addTextTask();
+  const hint = document.getElementById('smart-hint');
+  if(hint) hint.style.display = 'none';
+}
+function clearSmartInput(){
+  const inp = document.getElementById('smart-input');
+  if(inp){ inp.value=''; }
+  search='';
+  const hint = document.getElementById('smart-hint');
+  if(hint) hint.style.display = 'none';
+  renderDetailScreen();
 }
 function addImageTask(fileInput){
   const file=fileInput.files[0]; if(!file) return;
@@ -967,20 +1148,6 @@ function deleteItem(id){
 // ══════════════════════════════════════════
 //  SEARCH
 // ══════════════════════════════════════════
-function onSearch(inp){
-  search=inp.value;
-  inp.classList.toggle('has-text',!!search);
-  document.getElementById('search-clear').classList.toggle('visible',!!search);
-  renderDetailScreen();
-}
-function clearSearch(){
-  const inp=document.getElementById('search-input');
-  inp.value=''; search='';
-  inp.classList.remove('has-text');
-  document.getElementById('search-clear').classList.remove('visible');
-  renderDetailScreen();
-}
-
 // ══════════════════════════════════════════
 //  DRAG TO REORDER
 // ══════════════════════════════════════════
