@@ -1319,13 +1319,26 @@ function updateDropLine(from,to){
   if(!drag) return;
   const insertBefore=to>from?to+1:to;
   const scroll=document.getElementById('list-scroll');
-  const rows=Array.from(scroll.querySelectorAll('.task-row')).filter(r=>r.id!=='task-'+drag.id);
+
+  // Only consider active (draggable) row wrappers — not completed ones
+  const activeRowIds = drag.rowIds;
+  const activeWrappers = activeRowIds
+    .map(rid => {
+      const el = document.getElementById('task-'+rid);
+      return el ? el.closest('.row-wrap') || el.parentElement : null;
+    })
+    .filter(Boolean);
+
   const line=document.createElement('div'); line.id='drop-line'; line.className='drop-line';
-  if(insertBefore>=rows.length){
-    const last=rows[rows.length-1];
-    if(last) last.parentElement.after(line); else scroll.appendChild(line);
+
+  if(activeWrappers.length === 0){
+    scroll.appendChild(line);
+  } else if(insertBefore >= activeWrappers.length){
+    // Place after the last active row
+    const last = activeWrappers[activeWrappers.length-1];
+    last.after(line);
   } else {
-    rows[insertBefore].parentElement.before(line);
+    activeWrappers[insertBefore].before(line);
   }
 }
 
