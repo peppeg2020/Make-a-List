@@ -203,7 +203,12 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 
 /* Scrollable list area */
 #list-scroll{flex:1;overflow-y:auto;padding:4px 16px 0;-webkit-overflow-scrolling:touch}
-.section-label{font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,0.3);text-transform:uppercase;margin-top:16px;margin-bottom:8px;padding:0 2px}
+.item-del-btn{background:none;border:none;cursor:pointer;flex-shrink:0;padding:4px;line-height:0;opacity:0.5;transition:opacity 0.15s}
+.item-del-btn:active{opacity:1}
+.done-row{opacity:0.5;background:rgba(255,255,255,0.04)!important;}
+.done-row .task-edit-input{text-decoration:line-through}
+.section-label{font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,0.3);text-transform:uppercase;margin-top:20px;margin-bottom:10px;padding:0 2px;display:flex;align-items:center;gap:8px}
+.section-label::before,.section-label::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.08)}
 .empty{text-align:center;margin-top:60px;color:rgba(255,255,255,0.25);font-size:15px;line-height:1.6}
 .drop-line{height:3px;border-radius:2px;background:linear-gradient(90deg,#007aff,#5856d6);margin:2px 0;box-shadow:0 0 8px rgba(0,122,255,0.7);animation:pulseIn 0.12s ease}
 
@@ -406,7 +411,7 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
   </div>
 
   <div id="list-scroll"></div>
-  <div class="tip">Hold ≡ to reorder</div>
+  <div class="tip" id="reorder-tip" style="display:none">Hold ≡ to reorder</div>
 </div>
 
 <!-- List action sheet -->
@@ -1045,6 +1050,15 @@ function renderDetailScreen(){
     // Prevent drag handle from interfering with caption editing
     el.addEventListener('touchstart', e=>e.stopPropagation(), {passive:true});
   });
+  updateTip();
+}
+
+function updateTip(){
+  const list = activeList();
+  const tip = document.getElementById('reorder-tip');
+  if(!tip) return;
+  const activeCount = list ? list.items.filter(i=>!i.done).length : 0;
+  tip.style.display = activeCount >= 2 ? 'block' : 'none';
 }
 
 function updateHeroSub(){
@@ -1054,7 +1068,7 @@ function updateHeroSub(){
 
 function renderItemHTML(item, index, q){
   const isImg = !!item.image;
-  const rowCls = 'task-row'+(isImg?' is-image':'');
+  const rowCls = 'task-row'+(isImg?' is-image':'')+(item.done?' done-row':'');
   const stroke = item.done?'#fff':'#c7c7cc';
   const fill   = item.done?'#34c759':'transparent';
   const checkPath = item.done?`<path d="M7 12.5l3.5 3.5 6.5-7" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`:'';
@@ -1077,14 +1091,28 @@ function renderItemHTML(item, index, q){
     ? `<div class="drag-handle" data-id="${item.id}" data-idx="${index}"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><line x1="3" y1="4" x2="15" y2="4" stroke="#c7c7cc" stroke-width="1.5" stroke-linecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="#c7c7cc" stroke-width="1.5" stroke-linecap="round"/><line x1="3" y1="14" x2="15" y2="14" stroke="#c7c7cc" stroke-width="1.5" stroke-linecap="round"/></svg></div>`
     : '';
 
-  // Each row
+  // Delete button — always visible on the right
+  const delBtn = `<button class="item-del-btn" onclick="deleteItem(${item.id})" title="Delete">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round"/></svg>
+  </button>`;
+
   return `<div class="row-wrap" id="rw-${item.id}">
     <div class="${rowCls}" id="task-${item.id}" data-id="${item.id}">
       <button class="check-btn" onclick="toggleItem(${item.id})">${checkSVG}</button>
       <div class="task-content">${content}</div>
       ${handle}
+      ${delBtn}
     </div>
   </div>`;
+}
+
+// ── Haptic feedback ───────────────────────────────────────────────────────────
+function haptic(style) {
+  try {
+    if (window.navigator && window.navigator.vibrate) {
+      window.navigator.vibrate(style === 'light' ? 30 : style === 'medium' ? 50 : 10);
+    }
+  } catch(e){}
 }
 
 // ── Item operations ───────────────────────────────────────────────────────────
@@ -1094,6 +1122,7 @@ function addTextTask(){
   const list = activeList(); if(!list) return;
   list.items.push({id:nextItemId++, text, done:false, image:null});
   inp.value=''; search='';
+  haptic('light');
   save(); renderDetailScreen();
 }
 
@@ -1137,12 +1166,22 @@ function addImageTask(fileInput){
 function toggleItem(id){
   const list=activeList(); if(!list) return;
   const item=list.items.find(i=>i.id===id);
-  if(item){ item.done=!item.done; save(); renderDetailScreen(); }
+  if(item){
+    item.done=!item.done;
+    haptic(item.done ? 'medium' : 'light');
+    save(); renderDetailScreen();
+    updateTip();
+  }
 }
 function deleteItem(id){
   const list=activeList(); if(!list) return;
-  list.items=list.items.filter(i=>i.id!==id);
-  save(); renderDetailScreen();
+  haptic('light');
+  const rw = document.getElementById('rw-'+id);
+  if(rw){ rw.style.transition='opacity 0.18s, max-height 0.2s'; rw.style.opacity='0'; rw.style.maxHeight='0'; rw.style.overflow='hidden'; }
+  setTimeout(()=>{
+    list.items=list.items.filter(i=>i.id!==id);
+    save(); renderDetailScreen();
+  }, 200);
 }
 
 // ══════════════════════════════════════════
