@@ -522,6 +522,8 @@ const DROPBOX_BACKUP_PATH = '/mylists-backup.json';
 const GDRIVE_CLIENT_ID    = '801517587590-qjea3b1ji3kjbm0toc69cgi688ajtmn8.apps.googleusercontent.com';
 const GDRIVE_SCOPE        = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';
 const GDRIVE_BACKUP_NAME  = 'make-a-list-backup.json';
+// Must match exactly one of the redirect URIs registered in Google Cloud Console
+const GDRIVE_REDIRECT_URI = 'https://giuseppegiannola.github.io/make-a-list/';
 let gdriveToken = null;
 
 // ══════════════════════════════════════════
@@ -1426,7 +1428,7 @@ const appKeyMissing=()=>DROPBOX_APP_KEY==='YOUR_DROPBOX_APP_KEY';
 
 // ── Google Drive OAuth ────────────────────────────────────────────────────────
 function startGDriveOAuth(){
-  const redirect = encodeURIComponent(window.location.href.split('#')[0]);
+  const redirect = encodeURIComponent(GDRIVE_REDIRECT_URI);
   const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GDRIVE_CLIENT_ID}&redirect_uri=${redirect}&response_type=token&scope=${encodeURIComponent(GDRIVE_SCOPE)}&state=gdrive`;
   window.location.href = url;
 }
