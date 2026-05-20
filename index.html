@@ -319,13 +319,6 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
       <div style="margin-top:4px;font-size:14px;color:rgba(255,255,255,0.4)" id="lists-subtitle">0 lists</div>
     </div>
     <button class="dbx-nav-btn" id="dbx-open-btn-home" onclick="openDbxPanel()" style="margin-top:8px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-        <path d="M6 2L12 6.5L6 11L0 6.5L6 2Z" fill="currentColor"/>
-        <path d="M18 2L24 6.5L18 11L12 6.5L18 2Z" fill="currentColor"/>
-        <path d="M0 13.5L6 9L12 13.5L6 18L0 13.5Z" fill="currentColor"/>
-        <path d="M24 13.5L18 9L12 13.5L18 18L24 13.5Z" fill="currentColor"/>
-        <path d="M6 19.5L12 15L18 19.5L12 24L6 19.5Z" fill="currentColor"/>
-      </svg>
       <span id="dbx-home-label">Backup</span>
     </button>
   </div>
@@ -520,7 +513,7 @@ const DROPBOX_BACKUP_PATH = '/mylists-backup.json';
 
 // ── Google Drive config ───────────────────────────────────────────────────────
 const GDRIVE_CLIENT_ID    = '801517587590-qjea3b1ji3kjbm0toc69cgi688ajtmn8.apps.googleusercontent.com';
-const GDRIVE_SCOPE        = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/drive.file';
+const GDRIVE_SCOPE        = 'https://www.googleapis.com/auth/drive.file';
 const GDRIVE_BACKUP_NAME  = 'make-a-list-backup.json';
 let gdriveToken = null;
 
