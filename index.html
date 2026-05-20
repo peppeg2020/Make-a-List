@@ -604,6 +604,9 @@ function scheduleAutoBackup() {
       // 3. Also auto-save to Google Drive if connected
       if (gdriveToken) {
         await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+        for (const list of lists) {
+          await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
+        }
       }
       // Show confirmation
       const lbl = document.getElementById('dbx-btn-label');
@@ -1480,10 +1483,33 @@ async function gdriveDownload(token) {
 let gdriveStatus = null;
 let gdriveMessage = '';
 
+async function gdriveUploadText(token, filename, text) {
+  const { fileId, folderId } = await gdriveGetFileId(token);
+  // Find existing txt file with this name
+  const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${filename}' and '${folderId}' in parents and trashed=false&fields=files(id)`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  const searchData = await searchRes.json();
+  const existingId = searchData.files && searchData.files.length > 0 ? searchData.files[0].id : null;
+  const metadata = existingId ? { name: filename } : { name: filename, parents: [folderId] };
+  const body = new FormData();
+  body.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  body.append('file', new Blob([text], { type: 'text/plain' }));
+  const url = existingId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart`
+    : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+  return fetch(url, { method: existingId ? 'PATCH' : 'POST', headers: { 'Authorization': `Bearer ${token}` }, body });
+}
+
 async function handleGDriveSave() {
   gdriveStatus = 'saving'; gdriveMessage = 'Saving to Google Drive…'; renderDbxPanel();
   try {
+    // 1. Save machine-readable restore file
     await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+    // 2. Save each list as a readable .txt file
+    for (const list of lists) {
+      await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
+    }
     gdriveStatus = 'saved'; gdriveMessage = '✓ Saved to Google Drive!';
     setTimeout(() => { gdriveStatus = null; gdriveMessage = ''; renderDbxPanel(); }, 3000);
   } catch(e) { gdriveStatus = 'error'; gdriveMessage = 'Error: ' + e.message; }
