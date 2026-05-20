@@ -1423,17 +1423,35 @@ function startGDriveOAuth(){
   window.location.href = url;
 }
 
-async function gdriveGetFileId(token) {
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_BACKUP_NAME}' and trashed=false&fields=files(id,name)`, {
+async function gdriveGetOrCreateFolder(token) {
+  // Check if folder exists
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='Make a List' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
   const data = await res.json();
-  return data.files && data.files.length > 0 ? data.files[0].id : null;
+  if (data.files && data.files.length > 0) return data.files[0].id;
+  // Create folder if it doesn't exist
+  const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Make a List', mimeType: 'application/vnd.google-apps.folder' })
+  });
+  const folder = await createRes.json();
+  return folder.id;
+}
+
+async function gdriveGetFileId(token) {
+  const folderId = await gdriveGetOrCreateFolder(token);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_BACKUP_NAME}' and '${folderId}' in parents and trashed=false&fields=files(id,name)`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  const data = await res.json();
+  return data.files && data.files.length > 0 ? { fileId: data.files[0].id, folderId } : { fileId: null, folderId };
 }
 
 async function gdriveUpload(token, content) {
-  const fileId = await gdriveGetFileId(token);
-  const metadata = { name: GDRIVE_BACKUP_NAME };
+  const { fileId, folderId } = await gdriveGetFileId(token);
+  const metadata = fileId ? { name: GDRIVE_BACKUP_NAME } : { name: GDRIVE_BACKUP_NAME, parents: [folderId] };
   const body = new FormData();
   body.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
   body.append('file', new Blob([JSON.stringify(content)], { type: 'application/json' }));
@@ -1450,7 +1468,7 @@ async function gdriveUpload(token, content) {
 }
 
 async function gdriveDownload(token) {
-  const fileId = await gdriveGetFileId(token);
+  const { fileId } = await gdriveGetFileId(token);
   if (!fileId) throw new Error('not_found');
   const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
     headers: { 'Authorization': `Bearer ${token}` }
