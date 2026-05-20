@@ -1424,7 +1424,7 @@ function startGDriveOAuth(){
 }
 
 async function gdriveGetFileId(token) {
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=name='${GDRIVE_BACKUP_NAME}'&fields=files(id,name)`, {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_BACKUP_NAME}' and trashed=false&fields=files(id,name)`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
   const data = await res.json();
@@ -1433,7 +1433,7 @@ async function gdriveGetFileId(token) {
 
 async function gdriveUpload(token, content) {
   const fileId = await gdriveGetFileId(token);
-  const metadata = { name: GDRIVE_BACKUP_NAME, parents: fileId ? undefined : ['appDataFolder'] };
+  const metadata = { name: GDRIVE_BACKUP_NAME };
   const body = new FormData();
   body.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
   body.append('file', new Blob([JSON.stringify(content)], { type: 'application/json' }));
