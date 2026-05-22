@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#1a1a2e"/>
 <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Make%20a%20List%22%2C%22short_name%22%3A%22Make%20a%20List%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%231a1a2e%22%2C%22theme_color%22%3A%22%231a1a2e%22%2C%22orientation%22%3A%22portrait%22%7D"/>
 <link rel="apple-touch-icon" id="apple-icon" href=""/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <title>Make a List</title>
 
 <script>
@@ -334,11 +335,15 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
     </div>
 
     <!-- New List button -->
-    <div style="margin:0 20px">
-      <button id="new-list-btn" onclick="openNewListModal()" style="width:100%;box-sizing:border-box">
+    <div style="margin:0 20px;display:flex;gap:10px">
+      <button id="new-list-btn" onclick="openNewListModal()" style="flex:1;box-sizing:border-box">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><line x1="10" y1="3" x2="10" y2="17" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="10" x2="17" y2="10" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
         New List
       </button>
+      <button onclick="document.getElementById('spreadsheet-input').click()" style="flex:1;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.15);border-radius:16px;padding:16px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
+        📊 Import
+      </button>
+      <input type="file" id="spreadsheet-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="importSpreadsheet(this)"/>
     </div>
 
     <!-- List cards -->
@@ -800,7 +805,56 @@ function createList(){
   lists.push({ id:nextListId++, name, icon:selectedEmoji, items:[], createdAt: Date.now() });
   save(); closeNewListModal(); renderListsScreen();
 }
-// ── List card swipe-to-delete ─────────────────────────────────────────────────
+// ── Spreadsheet Import ────────────────────────────────────────────────────────
+function importSpreadsheet(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const name = file.name.replace(/\.(csv|xlsx|xls)$/i, '');
+  const ext = file.name.split('.').pop().toLowerCase();
+  const reader = new FileReader();
+
+  if (ext === 'csv') {
+    reader.onload = e => {
+      const items = parseCSV(e.target.result);
+      if (items.length === 0) { alert('No items found in the file.'); return; }
+      createListFromItems(name, items);
+    };
+    reader.readAsText(file);
+  } else {
+    // XLSX — use SheetJS via CDN
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        const items = rows
+          .map(r => (r[0] || '').toString().trim())
+          .filter(t => t.length > 0);
+        if (items.length === 0) { alert('No items found in the file.'); return; }
+        createListFromItems(name, items);
+      } catch(e) { alert('Could not read file. Make sure it\'s a valid Excel or CSV file.'); }
+    };
+    reader.readAsBinaryString(file);
+  }
+  input.value = '';
+}
+
+function parseCSV(text) {
+  return text.split('\n')
+    .map(line => line.replace(/^"|"$/g, '').split(',')[0].trim())
+    .filter(t => t.length > 0);
+}
+
+function createListFromItems(name, items) {
+  const listName = name || 'Imported List';
+  const newItems = items.map(text => ({ id: nextItemId++, text, done: false, image: null }));
+  lists.push({ id: nextListId++, name: listName, icon: '📋', items: newItems, createdAt: Date.now() });
+  save();
+  renderListsScreen();
+  // Show confirmation
+  const msg = `✓ Imported "${listName}" with ${newItems.length} items!`;
+  alert(msg);
+} ─────────────────────────────────────────────────
 const lcSwipeState = {};
 
 function lcTap(e, id) {
