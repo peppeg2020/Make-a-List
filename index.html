@@ -373,8 +373,7 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
     <div class="modal-handle"></div>
     <div class="modal-title">New List</div>
     <input class="modal-field" id="new-list-name" placeholder="List name…"
-      onkeydown="if(event.key==='Enter')createList()"
-      onblur="createListOnBlur()"/>
+      onkeydown="if(event.key==='Enter')createList()"/>
     <div style="font-size:11px;color:rgba(255,255,255,0.3);margin:-4px 0 12px;text-align:center">Press Return or ✓ to create</div>
     <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:10px;letter-spacing:0.5px">ICON</div>
     <div class="emoji-row" id="emoji-row"></div>
@@ -848,20 +847,7 @@ function selectEmoji(em){
     b.classList.toggle('selected', b.textContent===em);
   });
 }
-let _creatingList = false;
-function createListOnBlur(){
-  setTimeout(()=>{
-    if(_creatingList) return;
-    const modal = document.getElementById('new-list-modal');
-    if(!modal.classList.contains('open')) return;
-    const name = document.getElementById('new-list-name').value.trim();
-    if(name) createList();
-  }, 150);
-}
 function createList(){
-  if(_creatingList) return;
-  _creatingList = true;
-  setTimeout(()=>{ _creatingList = false; }, 300);
   const name = document.getElementById('new-list-name').value.trim();
   if(!name) return;
   lists.push({ id:nextListId++, name, icon:selectedEmoji, items:[], createdAt: Date.now() });
@@ -1206,12 +1192,10 @@ function addTextTask(){
   const inp = document.getElementById('smart-input');
   const text = inp.value.trim(); if(!text) return;
   const list = activeList(); if(!list) return;
-  // Clear input and search FIRST before anything else
   search = '';
   inp.value = '';
   const hint = document.getElementById('smart-hint');
   if(hint) hint.style.display = 'none';
-  // Now add the item
   list.items.unshift({id:nextItemId++, text, done:false, image:null});
   haptic('light');
   save();
@@ -1222,18 +1206,12 @@ function addTextTask(){
 //  SMART INPUT — search while typing, add on Return
 // ══════════════════════════════════════════
 function onSmartInput(inp){
-  // Don't update search if we're in the middle of adding an item
-  if(_committing) return;
   search = inp.value;
   const hint = document.getElementById('smart-hint');
   if(hint) hint.style.display = search ? 'block' : 'none';
   renderDetailScreen();
 }
-let _committing = false;
 function commitSmartInput(){
-  if(_committing) return;
-  _committing = true;
-  setTimeout(()=>{ _committing = false; }, 500);
   addTextTask();
 }
 function clearSmartInput(){
