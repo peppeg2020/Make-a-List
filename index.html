@@ -305,6 +305,9 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 .green-dot{width:8px;height:8px;border-radius:50%;background:#34c759;flex-shrink:0}
 .more-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:12px;padding:10px 16px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:16px;letter-spacing:2px;line-height:1;transition:background 0.15s}
 .more-btn:active{background:rgba(255,255,255,0.18)}
+.sort-lists-opt{width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:-apple-system,sans-serif}
+.sort-lists-opt.active{color:#007aff;font-weight:600}
+.sort-lists-opt:last-child{border-bottom:none}
 </style>
 </head>
 <body>
@@ -316,7 +319,10 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
   <div class="header" style="padding:28px 24px 8px;flex-shrink:0;display:flex;justify-content:space-between;align-items:flex-start">
     <div>
       <h1 style="font-size:34px;font-weight:700;letter-spacing:-1px">Make a List</h1>
-      <div style="margin-top:4px;font-size:14px;color:rgba(255,255,255,0.4)" id="lists-subtitle">0 lists</div>
+      <div style="margin-top:4px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:14px;color:rgba(255,255,255,0.4)" id="lists-subtitle">0 lists</span>
+        <button onclick="openSortListsSheet()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.35);font-size:12px;padding:0;font-family:-apple-system,sans-serif;" id="sort-label">↕ Date Added</button>
+      </div>
     </div>
     <button class="dbx-nav-btn" id="dbx-open-btn-home" onclick="openDbxPanel()" style="margin-top:8px">
       <span id="dbx-home-label">☁️ Backup</span>
@@ -334,20 +340,30 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
     </div>
 
     <!-- New List button -->
-    <div style="margin:0 20px;display:flex;gap:10px">
-      <button id="new-list-btn" onclick="openNewListModal()" style="flex:1;box-sizing:border-box">
+    <div style="margin:0 20px">
+      <button id="new-list-btn" onclick="openNewListModal()" style="width:100%;box-sizing:border-box">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><line x1="10" y1="3" x2="10" y2="17" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="10" x2="17" y2="10" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
         New List
       </button>
-      <button onclick="document.getElementById('spreadsheet-input').click()" style="flex:1;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.15);border-radius:16px;padding:16px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
-        📊 Import
-      </button>
-      <input type="file" id="spreadsheet-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="importSpreadsheet(this)"/>
     </div>
 
     <!-- List cards -->
     <div id="lists-container" style="margin:0 20px"></div>
 
+  </div>
+</div>
+
+<!-- Sort Lists sheet -->
+<div id="sort-lists-overlay" onclick="closeSortListsSheet()" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
+  <div onclick="event.stopPropagation()" style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
+    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
+      <div style="padding:14px 16px 10px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Sort Lists</div>
+      <button onclick="setSortLists('dateAdded')" class="sort-lists-opt" id="sl-dateAdded">📅 Date Added</button>
+      <button onclick="setSortLists('dateModified')" class="sort-lists-opt" id="sl-dateModified">🕐 Date Modified</button>
+      <button onclick="setSortLists('nameAZ')" class="sort-lists-opt" id="sl-nameAZ">🔤 Name A → Z</button>
+      <button onclick="setSortLists('nameZA')" class="sort-lists-opt" id="sl-nameZA">🔤 Name Z → A</button>
+    </div>
+    <button onclick="closeSortListsSheet()" style="width:100%;padding:16px;background:rgba(40,44,70,0.98);border:none;border-radius:16px;cursor:pointer;color:#fff;font-size:17px;font-weight:600">Cancel</button>
   </div>
 </div>
 
@@ -592,36 +608,64 @@ function safeFilename(name) {
 }
 
 // Auto-backup timer
+let lastBackupTime = localStorage.getItem('last_backup_time') || null;
+
+function updateBackupTimestamp() {
+  lastBackupTime = new Date().toISOString();
+  localStorage.setItem('last_backup_time', lastBackupTime);
+  updateBackupButtonLabel();
+}
+
+function updateBackupButtonLabel() {
+  const lbl = document.getElementById('dbx-btn-label');
+  const homeLbl = document.getElementById('dbx-home-label');
+  const connected = dbxToken || gdriveToken;
+  let text = '☁️ Backup';
+  if (connected && lastBackupTime) {
+    const d = new Date(lastBackupTime);
+    const now = new Date();
+    const diffMin = Math.round((now - d) / 60000);
+    let timeStr;
+    if (diffMin < 1) timeStr = 'just now';
+    else if (diffMin < 60) timeStr = diffMin + 'm ago';
+    else if (diffMin < 1440) timeStr = Math.round(diffMin/60) + 'h ago';
+    else timeStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+    text = '☁️ ' + timeStr;
+  }
+  if (lbl) lbl.textContent = text;
+  if (homeLbl) homeLbl.textContent = text;
+}
+
 let autoBackupTimer = null;
 function scheduleAutoBackup() {
-  if (!dbxToken) return;
+  if (!dbxToken && !gdriveToken) return; // need at least one
   clearTimeout(autoBackupTimer);
   autoBackupTimer = setTimeout(async () => {
     try {
-      // 1. Save the machine-readable restore file
-      await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
-      // 2. Save each list as a readable .txt file
-      for (const list of lists) {
-        const fname = `/Lists/${safeFilename(list.name)}.txt`;
-        await dbxUpload(fname, listToText(list), true);
+      if (dbxToken) {
+        await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
+        for (const list of lists) {
+          const fname = `/Lists/${safeFilename(list.name)}.txt`;
+          await dbxUpload(fname, listToText(list), true);
+        }
       }
-      // 3. Also auto-save to Google Drive if connected
       if (gdriveToken) {
         await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
         for (const list of lists) {
           await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
         }
       }
-      // Show confirmation
-      const lbl = document.getElementById('dbx-btn-label');
-      const homeLbl = document.getElementById('dbx-home-label');
-      if (lbl) { lbl.textContent = '☁️ ✓'; setTimeout(() => { lbl.textContent = '☁️ Backup'; }, 2000); }
-      if (homeLbl) { homeLbl.textContent = '☁️ ✓'; setTimeout(() => { homeLbl.textContent = '☁️ Backup'; }, 2000); }
+      updateBackupTimestamp();
     } catch(e) {}
   }, 3000);
 }
 
 function save() {
+  // Stamp updatedAt on the active list when inside one
+  if (currentListId !== null) {
+    const list = activeList();
+    if (list) list.updatedAt = Date.now();
+  }
   try { localStorage.setItem('mylists_data', JSON.stringify({lists,nextListId,nextItemId})); } catch(e){}
   scheduleAutoBackup();
 }
@@ -713,9 +757,27 @@ function clearListsSearch(){
 
 function openDbxPanel(){document.getElementById('dbx-overlay').classList.add('open');renderDbxPanel();}
 
+let listsSort = 'dateAdded'; // dateAdded | dateModified | nameAZ | nameZA
+
+function openSortListsSheet(){
+  document.getElementById('sort-lists-overlay').style.display='flex';
+  // Highlight current
+  ['dateAdded','dateModified','nameAZ','nameZA'].forEach(k=>{
+    document.getElementById('sl-'+k).classList.toggle('active', listsSort===k);
+  });
+}
+function closeSortListsSheet(){ document.getElementById('sort-lists-overlay').style.display='none'; }
+function setSortLists(order){ listsSort=order; closeSortListsSheet(); renderListsScreen(); }
+
+const SORT_LABELS = { dateAdded:'↕ Date Added', dateModified:'↕ Date Modified', nameAZ:'↕ A → Z', nameZA:'↕ Z → A' };
+
 function renderListsScreen() {
-  // Sort by createdAt ascending (oldest first = order added)
-  const sorted = [...lists].sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+  // Sort
+  let sorted = [...lists];
+  if      (listsSort==='dateAdded')    sorted.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+  else if (listsSort==='dateModified') sorted.sort((a,b)=>(b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0));
+  else if (listsSort==='nameAZ')       sorted.sort((a,b)=>a.name.localeCompare(b.name));
+  else if (listsSort==='nameZA')       sorted.sort((a,b)=>b.name.localeCompare(a.name));
 
   // Filter by search
   const q = listsSearch.trim().toLowerCase();
@@ -723,6 +785,8 @@ function renderListsScreen() {
 
   const sub = document.getElementById('lists-subtitle');
   sub.textContent = lists.length === 1 ? '1 list' : lists.length + ' lists';
+  const sl = document.getElementById('sort-label');
+  if(sl) sl.textContent = SORT_LABELS[listsSort] || '↕ Sort';
 
   const con = document.getElementById('lists-container');
   if (!lists.length) {
@@ -804,68 +868,6 @@ function createList(){
   lists.push({ id:nextListId++, name, icon:selectedEmoji, items:[], createdAt: Date.now() });
   save(); closeNewListModal(); renderListsScreen();
 }
-// ── Spreadsheet Import ────────────────────────────────────────────────────────
-function importSpreadsheet(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const name = file.name.replace(/\.(csv|xlsx|xls)$/i, '');
-  const ext = file.name.split('.').pop().toLowerCase();
-  const reader = new FileReader();
-
-  if (ext === 'csv') {
-    reader.onload = e => {
-      const items = parseCSV(e.target.result);
-      if (items.length === 0) { alert('No items found in the file.'); return; }
-      createListFromItems(name, items);
-    };
-    reader.readAsText(file);
-  } else {
-    // Load SheetJS on demand for Excel files
-    if (typeof XLSX === 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      script.onload = () => readExcel(file, name);
-      script.onerror = () => alert('Could not load Excel reader. Try saving your file as CSV instead.');
-      document.head.appendChild(script);
-    } else {
-      readExcel(file, name);
-    }
-  }
-  input.value = '';
-}
-
-function readExcel(file, name) {
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      const wb = XLSX.read(e.target.result, { type: 'binary' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
-      const items = rows.map(r => (r[0] || '').toString().trim()).filter(t => t.length > 0);
-      if (items.length === 0) { alert('No items found in the file.'); return; }
-      createListFromItems(name, items);
-    } catch(e) { alert('Could not read file. Try saving as CSV instead.'); }
-  };
-  reader.readAsBinaryString(file);
-}
-
-function parseCSV(text) {
-  return text.split('\n')
-    .map(line => line.replace(/^"|"$/g, '').split(',')[0].trim())
-    .filter(t => t.length > 0);
-}
-
-function createListFromItems(name, items) {
-  const listName = name || 'Imported List';
-  const newItems = items.map(text => ({ id: nextItemId++, text, done: false, image: null }));
-  lists.push({ id: nextListId++, name: listName, icon: '📋', items: newItems, createdAt: Date.now() });
-  save();
-  renderListsScreen();
-  // Show confirmation
-  const msg = `✓ Imported "${listName}" with ${newItems.length} items!`;
-  alert(msg);
-}
-
 // ── List card swipe-to-delete ─────────────────────────────────────────────────
 const lcSwipeState = {};
 
@@ -1205,7 +1207,7 @@ function addTextTask(){
   const inp = document.getElementById('smart-input');
   const text = inp.value.trim(); if(!text) return;
   const list = activeList(); if(!list) return;
-  list.items.push({id:nextItemId++, text, done:false, image:null});
+  list.items.unshift({id:nextItemId++, text, done:false, image:null});
   inp.value=''; search='';
   haptic('light');
   save(); renderDetailScreen();
@@ -1242,7 +1244,7 @@ function addImageTask(fileInput){
   const reader=new FileReader();
   reader.onload=ev=>{
     const list=activeList(); if(!list) return;
-    list.items.push({id:nextItemId++,text:'',done:false,image:ev.target.result});
+    list.items.unshift({id:nextItemId++,text:'',done:false,image:ev.target.result});
     save(); renderDetailScreen();
   };
   reader.readAsDataURL(file);
@@ -1466,21 +1468,19 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementB
   if(hash){
     const p=new URLSearchParams(hash.replace('#','?'));
     const t=p.get('access_token');
-    if(t){dbxToken=t;sessionStorage.setItem('dbx_token',t);window.history.replaceState(null,'',window.location.pathname);}
-  }
-  if(!dbxToken) dbxToken=sessionStorage.getItem('dbx_token');
-  // Google Drive token from URL hash
-  if(hash){
-    const params=new URLSearchParams(hash.replace('#','?'));
-    const gt=params.get('access_token');
-    const state=params.get('state');
-    if(gt && state==='gdrive'){
-      gdriveToken=gt;
-      sessionStorage.setItem('gdrive_token',gt);
+    const state=new URLSearchParams(hash.replace('#','?')).get('state');
+    if(t && state==='gdrive'){
+      gdriveToken=t;
+      localStorage.setItem('gdrive_token',t);
+      window.history.replaceState(null,'',window.location.pathname);
+    } else if(t && !state){
+      dbxToken=t;
+      localStorage.setItem('dbx_token',t);
       window.history.replaceState(null,'',window.location.pathname);
     }
   }
-  if(!gdriveToken) gdriveToken=sessionStorage.getItem('gdrive_token');
+  if(!dbxToken) dbxToken=localStorage.getItem('dbx_token');
+  if(!gdriveToken) gdriveToken=localStorage.getItem('gdrive_token');
 })();
 
 const appKeyMissing=()=>DROPBOX_APP_KEY==='YOUR_DROPBOX_APP_KEY';
@@ -1577,6 +1577,7 @@ async function handleGDriveSave() {
       await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
     }
     gdriveStatus = 'saved'; gdriveMessage = '✓ Saved to Google Drive!';
+    updateBackupTimestamp();
     setTimeout(() => { gdriveStatus = null; gdriveMessage = ''; renderDbxPanel(); }, 3000);
   } catch(e) { gdriveStatus = 'error'; gdriveMessage = 'Error: ' + e.message; }
   renderDbxPanel();
@@ -1602,7 +1603,7 @@ async function handleGDriveRestore() {
 }
 
 function handleGDriveDisconnect() {
-  sessionStorage.removeItem('gdrive_token');
+  localStorage.removeItem('gdrive_token');
   gdriveToken = null; gdriveStatus = null; gdriveMessage = '';
   renderDbxPanel();
 }
@@ -1622,6 +1623,7 @@ async function handleBackup(){
       await dbxUpload(fname, listToText(list), true);
     }
     dbxStatus='saved';dbxMessage='✓ Saved to Dropbox!';
+    updateBackupTimestamp();
     setTimeout(()=>{dbxStatus=null;dbxMessage='';renderDbxPanel();},3000);
   }catch(err){dbxStatus='error';dbxMessage='Error: '+err.message;}
   renderDbxPanel();
@@ -1646,18 +1648,14 @@ async function handleRestore(){
   }catch(err){dbxStatus='error';dbxMessage=err.message.includes('not_found')?'No backup found yet.':'Error: '+err.message;}
   renderDbxPanel();
 }
-function handleDisconnect(){sessionStorage.removeItem('dbx_token');dbxToken=null;dbxStatus=null;dbxMessage='';renderDbxPanel();}
+function handleDisconnect(){localStorage.removeItem('dbx_token');dbxToken=null;dbxStatus=null;dbxMessage='';renderDbxPanel();}
 function updateDbxButtons() {
-  // Detail screen button
-  const lbl = document.getElementById('dbx-btn-label');
   const btn = document.getElementById('dbx-open-btn');
-  if (lbl) lbl.textContent = dbxToken ? '●' : 'Backup';
-  if (btn) btn.classList.toggle('connected', !!dbxToken);
-  // Home screen button
-  const homeLbl = document.getElementById('dbx-home-label');
   const homeBtn = document.getElementById('dbx-open-btn-home');
-  if (homeLbl) homeLbl.textContent = dbxToken ? '☁️ ●' : '☁️ Backup';
-  if (homeBtn) homeBtn.classList.toggle('connected', !!dbxToken);
+  const connected = dbxToken || gdriveToken;
+  if (btn) btn.classList.toggle('connected', !!connected);
+  if (homeBtn) homeBtn.classList.toggle('connected', !!connected);
+  updateBackupButtonLabel();
 }
 function closeDbxPanel(){document.getElementById('dbx-overlay').classList.remove('open');}
 function dbxOverlayClick(e){if(e.target===document.getElementById('dbx-overlay'))closeDbxPanel();}
