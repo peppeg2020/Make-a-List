@@ -415,7 +415,6 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
       <input type="text" id="smart-input" placeholder="Search or add item…"
         oninput="onSmartInput(this)"
         onkeydown="if(event.key==='Enter')commitSmartInput()"
-        onblur="commitSmartInput()"
         style="width:100%;padding-left:16px;padding-right:12px"/>
     </div>
     <button onclick="document.getElementById('file-input').click()" title="Add photo" style="flex-shrink:0;width:44px;height:44px;border-radius:12px;border:none;cursor:pointer;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:24px;">
@@ -1210,6 +1209,8 @@ function addTextTask(){
   list.items.unshift({id:nextItemId++, text, done:false, image:null});
   inp.value=''; search='';
   haptic('light');
+  const hint = document.getElementById('smart-hint');
+  if(hint) hint.style.display = 'none';
   save(); renderDetailScreen();
 }
 
@@ -1228,8 +1229,6 @@ function commitSmartInput(){
   _committing = true;
   setTimeout(()=>{ _committing = false; }, 300);
   addTextTask();
-  const hint = document.getElementById('smart-hint');
-  if(hint) hint.style.display = 'none';
 }
 function clearSmartInput(){
   const inp = document.getElementById('smart-input');
