@@ -660,7 +660,7 @@ function scheduleAutoBackup() {
 
 function save() {
   // Stamp updatedAt on the active list when inside one
-  if (currentListId !== null) {
+  if (activeListId !== null) {
     const list = activeList();
     if (list) list.updatedAt = Date.now();
   }
