@@ -1207,11 +1207,15 @@ function addTextTask(){
   const text = inp.value.trim(); if(!text) return;
   const list = activeList(); if(!list) return;
   list.items.unshift({id:nextItemId++, text, done:false, image:null});
-  inp.value=''; search='';
-  haptic('light');
+  // Clear everything BEFORE rendering so search filter doesn't hide new item
+  inp.value='';
+  search='';
   const hint = document.getElementById('smart-hint');
   if(hint) hint.style.display = 'none';
-  save(); renderDetailScreen();
+  haptic('light');
+  save();
+  // Small delay to ensure search is cleared before render
+  setTimeout(()=>{ renderDetailScreen(); }, 10);
 }
 
 // ══════════════════════════════════════════
@@ -1227,7 +1231,7 @@ let _committing = false;
 function commitSmartInput(){
   if(_committing) return;
   _committing = true;
-  setTimeout(()=>{ _committing = false; }, 300);
+  setTimeout(()=>{ _committing = false; }, 500);
   addTextTask();
 }
 function clearSmartInput(){
