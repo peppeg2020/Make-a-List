@@ -1206,22 +1206,24 @@ function addTextTask(){
   const inp = document.getElementById('smart-input');
   const text = inp.value.trim(); if(!text) return;
   const list = activeList(); if(!list) return;
-  list.items.unshift({id:nextItemId++, text, done:false, image:null});
-  // Clear everything BEFORE rendering so search filter doesn't hide new item
-  inp.value='';
-  search='';
+  // Clear input and search FIRST before anything else
+  search = '';
+  inp.value = '';
   const hint = document.getElementById('smart-hint');
   if(hint) hint.style.display = 'none';
+  // Now add the item
+  list.items.unshift({id:nextItemId++, text, done:false, image:null});
   haptic('light');
   save();
-  // Small delay to ensure search is cleared before render
-  setTimeout(()=>{ renderDetailScreen(); }, 10);
+  renderDetailScreen();
 }
 
 // ══════════════════════════════════════════
 //  SMART INPUT — search while typing, add on Return
 // ══════════════════════════════════════════
 function onSmartInput(inp){
+  // Don't update search if we're in the middle of adding an item
+  if(_committing) return;
   search = inp.value;
   const hint = document.getElementById('smart-hint');
   if(hint) hint.style.display = search ? 'block' : 'none';
