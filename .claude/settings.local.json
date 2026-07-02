@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(export PATH=\"/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin\")",
+      "Bash(/usr/bin/git --version)",
+      "Bash(git *)",
+      "Read(//Library/Developer/CommandLineTools/usr/bin/**)",
+      "Bash(/Library/Developer/CommandLineTools/usr/bin/git --version)",
+      "Bash(gh --version)",
+      "Read(//Users/giuseppegiannola/**)",
+      "Bash(ssh -T git@github.com)"
+    ]
+  }
+}

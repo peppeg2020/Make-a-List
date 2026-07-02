@@ -179,6 +179,11 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 .dbx-nav-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:5px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;transition:background 0.2s;white-space:nowrap}
 .dbx-nav-btn.connected{background:rgba(0,97,255,0.2);border-color:rgba(0,97,255,0.5);color:#7ab8ff}
 
+.search-icon-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s}
+.search-icon-btn.active{background:rgba(0,122,255,0.2);border-color:rgba(0,122,255,0.5)}
+.search-collapsible{max-height:0;overflow:hidden;opacity:0;transition:max-height 0.25s ease,opacity 0.18s ease;flex-shrink:0}
+.search-collapsible.open{max-height:70px;opacity:1}
+
 /* List title area */
 .list-hero{padding:8px 24px 12px;flex-shrink:0}
 .list-hero-icon{font-size:36px;margin-bottom:4px}
@@ -324,20 +329,27 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
         <button onclick="openSortListsSheet()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.35);font-size:12px;padding:0;font-family:-apple-system,sans-serif;" id="sort-label">↕ Date Added</button>
       </div>
     </div>
-    <button class="dbx-nav-btn" id="dbx-open-btn-home" onclick="openDbxPanel()" style="margin-top:8px">
-      <span id="dbx-home-label">☁️ Backup</span>
-    </button>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <button class="search-icon-btn" id="lists-search-toggle-btn" onclick="toggleListsSearch()" aria-label="Search">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <button class="dbx-nav-btn" id="dbx-open-btn-home" onclick="openDbxPanel()">
+        <span id="dbx-home-label">☁️ Backup</span>
+      </button>
+    </div>
   </div>
 
-  <!-- Single scrollable column: search + new list + cards -->
-  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 0 32px;display:flex;flex-direction:column;gap:10px">
-
-    <!-- Search bar -->
-    <div style="margin:0 20px;position:relative">
+  <!-- Collapsible search bar -->
+  <div class="search-collapsible" id="lists-search-collapsible">
+    <div style="margin:4px 20px 8px;position:relative">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:0.4;pointer-events:none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
       <input type="text" id="lists-search-input" placeholder="Search lists…" oninput="onListsSearch(this)" style="width:100%;box-sizing:border-box;padding:10px 36px;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:15px;outline:none;"/>
       <button class="search-clear" id="lists-search-clear" onclick="clearListsSearch()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%)">✕</button>
     </div>
+  </div>
+
+  <!-- Scrollable column: new list + cards -->
+  <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:4px 0 32px;display:flex;flex-direction:column;gap:10px">
 
     <!-- New List button -->
     <div style="margin:0 20px">
@@ -403,18 +415,23 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
     <div class="sub" id="hero-sub"></div>
   </div>
 
-  <!-- ••• button on the left above search -->
-  <div style="display:flex;justify-content:flex-start;padding:0 16px 6px">
+  <!-- ••• and search icon row -->
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 6px">
     <button class="more-btn" onclick="openListMenu()" title="More options">•••</button>
+    <button class="search-icon-btn" id="detail-search-toggle-btn" onclick="toggleDetailSearch()" aria-label="Search">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </button>
   </div>
 
-  <!-- Search bar -->
-  <div class="search-wrap" style="margin:0 16px 8px">
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="left:16px"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
-    <input type="text" id="search-input" placeholder="Search…"
-      oninput="onSearch(this)"
-      style="padding-left:36px"/>
-    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  <!-- Search bar (collapsible) -->
+  <div class="search-collapsible" id="detail-search-collapsible">
+    <div class="search-wrap" style="margin:0 16px 8px">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="left:16px"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <input type="text" id="search-input" placeholder="Search…"
+        oninput="onSearch(this)"
+        style="padding-left:36px"/>
+      <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+    </div>
   </div>
 
   <!-- Add item row -->
@@ -703,7 +720,11 @@ function activeList(){ return getList(activeListId); }
 function showListsScreen() {
   document.getElementById('lists-screen').classList.remove('hidden');
   document.getElementById('detail-screen').classList.add('hidden');
-  activeListId = null; search = '';
+  activeListId = null; search = ''; listsSearch = '';
+  const lsc = document.getElementById('lists-search-collapsible');
+  if(lsc) lsc.classList.remove('open');
+  const lsb = document.getElementById('lists-search-toggle-btn');
+  if(lsb) lsb.classList.remove('active');
   renderListsScreen();
 }
 
@@ -722,6 +743,10 @@ function openList(listId) {
   if(si){ si.value=''; si.classList.remove('has-text'); }
   const sc = document.getElementById('search-clear');
   if(sc){ sc.classList.remove('visible'); }
+  const dsc = document.getElementById('detail-search-collapsible');
+  if(dsc) dsc.classList.remove('open');
+  const dsb = document.getElementById('detail-search-toggle-btn');
+  if(dsb) dsb.classList.remove('active');
   const hint = document.getElementById('smart-hint');
   if(hint) hint.style.display = 'none';
   renderDetailScreen();
@@ -749,11 +774,28 @@ function onListsSearch(inp){
   document.getElementById('lists-search-clear').classList.toggle('visible', !!listsSearch);
   renderListsScreen();
 }
+function toggleListsSearch(){
+  const wrap = document.getElementById('lists-search-collapsible');
+  const btn  = document.getElementById('lists-search-toggle-btn');
+  if(!wrap) return;
+  if(wrap.classList.contains('open')){
+    clearListsSearch();
+  } else {
+    wrap.classList.add('open');
+    btn.classList.add('active');
+    setTimeout(()=>{ const inp=document.getElementById('lists-search-input'); if(inp) inp.focus(); },50);
+  }
+}
 function clearListsSearch(){
   listsSearch = '';
   const inp = document.getElementById('lists-search-input');
   if(inp){ inp.value=''; inp.classList.remove('has-text'); }
-  document.getElementById('lists-search-clear').classList.remove('visible');
+  const clr = document.getElementById('lists-search-clear');
+  if(clr) clr.classList.remove('visible');
+  const wrap = document.getElementById('lists-search-collapsible');
+  if(wrap) wrap.classList.remove('open');
+  const btn = document.getElementById('lists-search-toggle-btn');
+  if(btn) btn.classList.remove('active');
   renderListsScreen();
 }
 
@@ -1210,11 +1252,28 @@ function onSearch(inp){
   document.getElementById('search-clear').classList.toggle('visible', !!search);
   renderDetailScreen();
 }
+function toggleDetailSearch(){
+  const wrap = document.getElementById('detail-search-collapsible');
+  const btn  = document.getElementById('detail-search-toggle-btn');
+  if(!wrap) return;
+  if(wrap.classList.contains('open')){
+    clearSearch();
+  } else {
+    wrap.classList.add('open');
+    btn.classList.add('active');
+    setTimeout(()=>{ const inp=document.getElementById('search-input'); if(inp) inp.focus(); },50);
+  }
+}
 function clearSearch(){
   const inp = document.getElementById('search-input');
   if(inp){ inp.value=''; inp.classList.remove('has-text'); }
   search = '';
-  document.getElementById('search-clear').classList.remove('visible');
+  const clr = document.getElementById('search-clear');
+  if(clr) clr.classList.remove('visible');
+  const wrap = document.getElementById('detail-search-collapsible');
+  if(wrap) wrap.classList.remove('open');
+  const btn = document.getElementById('detail-search-toggle-btn');
+  if(btn) btn.classList.remove('active');
   renderDetailScreen();
 }
 function commitSmartInput(){ addTextTask(); }
