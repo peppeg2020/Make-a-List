@@ -332,7 +332,6 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-      <button class="more-btn" onclick="openListsMenu()" title="More options">•••</button>
       <button class="search-icon-btn" id="lists-search-toggle-btn" onclick="toggleListsSearch()" aria-label="Search">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
@@ -419,7 +418,6 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
       <svg width="10" height="16" viewBox="0 0 10 16" fill="none"><path d="M8 2L2 8L8 14" stroke="#007aff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Lists
     </button>
-    <div class="navbar-title" id="navbar-title"></div>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
       <button class="more-btn" onclick="openListMenu()" title="More options">•••</button>
       <button class="search-icon-btn" id="detail-search-toggle-btn" onclick="toggleDetailSearch()" aria-label="Search">
@@ -1153,16 +1151,12 @@ function confirmDeleteList(){
 // ══════════════════════════════════════════
 function renderDetailScreen(){
   const list = activeList(); if(!list) return;
-  document.getElementById('navbar-title').textContent = list.name;
   document.getElementById('hero-icon').textContent = list.icon;
   document.getElementById('hero-title').textContent = list.name;
   const remaining = list.items.filter(i=>!i.done).length;
   document.getElementById('hero-sub').textContent = remaining + ' remaining';
 
-  // DBX button
-  const dbxBtn = document.getElementById('dbx-open-btn');
-  document.getElementById('dbx-btn-label').textContent = dbxToken ? '☁️ ●' : '☁️ Backup';
-  dbxBtn.classList.toggle('connected', !!dbxToken);
+  updateDbxButtons();
 
   const q = search.trim().toLowerCase();
   const matchFn = item => {
