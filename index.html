@@ -327,8 +327,7 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
     <div>
       <h1 style="font-size:34px;font-weight:700;letter-spacing:-1px">Make a List</h1>
       <div style="margin-top:4px;display:flex;align-items:center;gap:10px">
-        <span style="font-size:14px;color:rgba(255,255,255,0.4)" id="lists-subtitle">0 lists</span>
-        <button onclick="openSortListsSheet()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.35);font-size:12px;padding:0;font-family:-apple-system,sans-serif;" id="sort-label">↕ Date Added</button>
+<button onclick="openSortListsSheet()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.35);font-size:12px;padding:0;font-family:-apple-system,sans-serif;" id="sort-label">↕ Date Added</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
@@ -878,9 +877,7 @@ function renderListsScreen() {
   const q = listsSearch.trim().toLowerCase();
   const filtered = q ? sorted.filter(l => l.name.toLowerCase().includes(q)) : sorted;
 
-  const sub = document.getElementById('lists-subtitle');
-  sub.textContent = lists.length === 1 ? '1 list' : lists.length + ' lists';
-  const sl = document.getElementById('sort-label');
+const sl = document.getElementById('sort-label');
   if(sl) sl.textContent = SORT_LABELS[listsSort] || '↕ Sort';
 
   const con = document.getElementById('lists-container');
