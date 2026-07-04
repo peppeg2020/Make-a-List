@@ -432,7 +432,6 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
   <div class="list-hero">
     <div class="list-hero-icon" id="hero-icon"></div>
     <h1 id="hero-title"></h1>
-    <div class="sub" id="hero-sub"></div>
   </div>
 
   <!-- Search bar (collapsible) -->
@@ -1153,9 +1152,6 @@ function renderDetailScreen(){
   const list = activeList(); if(!list) return;
   document.getElementById('hero-icon').textContent = list.icon;
   document.getElementById('hero-title').textContent = list.name;
-  const remaining = list.items.filter(i=>!i.done).length;
-  document.getElementById('hero-sub').textContent = remaining + ' remaining';
-
   updateDbxButtons();
 
   const q = search.trim().toLowerCase();
@@ -1231,7 +1227,6 @@ function updateTip(){
 
 function updateHeroSub(){
   const list = activeList(); if(!list) return;
-  document.getElementById('hero-sub').textContent = list.items.filter(i=>!i.done).length + ' remaining';
 }
 
 function renderItemHTML(item, index, q){
