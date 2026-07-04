@@ -42,6 +42,8 @@
 })();
 </script>
 
+<script src="https://accounts.google.com/gsi/client" async></script>
+
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
@@ -539,6 +541,20 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 <script>
 'use strict';
 
+// ── PKCE helpers ──────────────────────────────────────────────────────────────
+function _pkceRandStr(n) {
+  const a = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  const b = new Uint8Array(n); crypto.getRandomValues(b);
+  return Array.from(b, v => a[v % a.length]).join('');
+}
+async function _pkceChallenge(v) {
+  const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v));
+  return btoa(String.fromCharCode(...new Uint8Array(d))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function _appBaseUrl() {
+  return window.location.href.split('#')[0].split('?')[0];
+}
+
 // ══════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════
@@ -550,6 +566,11 @@ const GDRIVE_CLIENT_ID    = '801517587590-qjea3b1ji3kjbm0toc69cgi688ajtmn8.apps.
 const GDRIVE_SCOPE        = 'https://www.googleapis.com/auth/drive.file';
 const GDRIVE_BACKUP_NAME  = 'make-a-list-backup.json';
 let gdriveToken = null;
+let gdriveTokenExpiry = 0;
+let gdriveTokenClient = null;
+let gdrivePendingResolve = null;
+let gdrivePendingReject = null;
+let gdriveRefreshPromise = null;
 
 // ══════════════════════════════════════════
 //  STATE
@@ -561,6 +582,9 @@ let nextItemId = 1;
 let activeListId = null;  // which list is open
 let search   = '';
 let dbxToken = null;
+let dbxRefreshToken = null;
+let dbxTokenExpiry = 0;
+let dbxRefreshPromise = null;
 let dbxStatus = null;
 let dbxMessage = '';
 
@@ -573,7 +597,7 @@ const DEFAULT_LISTS = [];
 
 // Upload a single file to Dropbox
 async function dbxUpload(path, content, isText) {
-  return fetch('https://content.dropboxapi.com/2/files/upload', {
+  const doFetch = () => fetch('https://content.dropboxapi.com/2/files/upload', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${dbxToken}`,
@@ -582,18 +606,29 @@ async function dbxUpload(path, content, isText) {
     },
     body: isText ? content : JSON.stringify(content),
   });
+  let res = await doFetch();
+  if (res.status === 401 && dbxRefreshToken) {
+    try { await _refreshDropboxToken(); res = await doFetch(); } catch(e) {}
+  }
+  return res;
 }
 
 // Delete a file from Dropbox (used when a list is deleted)
 async function dbxDelete(path) {
-  return fetch('https://api.dropboxapi.com/2/files/delete_v2', {
+  const doFetch = () => fetch('https://api.dropboxapi.com/2/files/delete_v2', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${dbxToken}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({path}),
-  }).catch(()=>{});
+  });
+  try {
+    let res = await doFetch();
+    if (res.status === 401 && dbxRefreshToken) {
+      try { await _refreshDropboxToken(); await doFetch(); } catch(e) {}
+    }
+  } catch(e) {}
 }
 
 // Format a list as a readable plain text file
@@ -658,6 +693,7 @@ function scheduleAutoBackup() {
   autoBackupTimer = setTimeout(async () => {
     try {
       if (dbxToken) {
+        await _ensureDropboxToken();
         await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
         for (const list of lists) {
           const fname = `/Lists/${safeFilename(list.name)}.txt`;
@@ -665,10 +701,13 @@ function scheduleAutoBackup() {
         }
       }
       if (gdriveToken) {
-        await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
-        for (const list of lists) {
-          await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
-        }
+        await _ensureGDriveToken();
+        await _withGDriveAuth(async () => {
+          await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+          for (const list of lists) {
+            await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
+          }
+        });
       }
       updateBackupTimestamp();
     } catch(e) {}
@@ -1503,32 +1542,104 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementB
 //  DROPBOX
 // ══════════════════════════════════════════
 (function(){
-  const hash=window.location.hash;
-  if(hash){
-    const p=new URLSearchParams(hash.replace('#','?'));
-    const t=p.get('access_token');
-    const state=new URLSearchParams(hash.replace('#','?')).get('state');
-    if(t && state==='gdrive'){
-      gdriveToken=t;
-      localStorage.setItem('gdrive_token',t);
-      window.history.replaceState(null,'',window.location.pathname);
-    } else if(t && !state){
-      dbxToken=t;
-      localStorage.setItem('dbx_token',t);
-      window.history.replaceState(null,'',window.location.pathname);
+  // ── Google Drive implicit-flow callback (URL hash) ──
+  const hash = window.location.hash;
+  if (hash) {
+    const p = new URLSearchParams(hash.replace('#', '?'));
+    const t = p.get('access_token');
+    const state = p.get('state');
+    if (t && state === 'gdrive') {
+      gdriveToken = t;
+      const expiresIn = parseInt(p.get('expires_in') || '3599');
+      gdriveTokenExpiry = Date.now() + expiresIn * 1000;
+      localStorage.setItem('gdrive_token', t);
+      localStorage.setItem('gdrive_token_expiry', String(gdriveTokenExpiry));
+      window.history.replaceState(null, '', window.location.pathname);
     }
   }
-  if(!dbxToken) dbxToken=localStorage.getItem('dbx_token');
-  if(!gdriveToken) gdriveToken=localStorage.getItem('gdrive_token');
+  // ── Dropbox PKCE callback (URL query params ?code=...) ──
+  const urlQ = new URLSearchParams(window.location.search);
+  const dbxCode = urlQ.get('code');
+  const dbxVerifier = sessionStorage.getItem('dbx_pkce_verifier');
+  if (dbxCode && dbxVerifier) {
+    sessionStorage.removeItem('dbx_pkce_verifier');
+    window.history.replaceState(null, '', window.location.pathname);
+    _exchangeDropboxCode(dbxCode, dbxVerifier).then(() => { renderDbxPanel(); updateDbxButtons(); });
+  }
+  // ── Load stored tokens ──
+  if (!dbxToken) dbxToken = localStorage.getItem('dbx_token');
+  dbxRefreshToken = localStorage.getItem('dbx_refresh_token');
+  dbxTokenExpiry = parseInt(localStorage.getItem('dbx_token_expiry') || '0');
+  if (!gdriveToken) gdriveToken = localStorage.getItem('gdrive_token');
+  gdriveTokenExpiry = parseInt(localStorage.getItem('gdrive_token_expiry') || '0');
 })();
 
 const appKeyMissing=()=>DROPBOX_APP_KEY==='YOUR_DROPBOX_APP_KEY';
 
-// ── Google Drive OAuth ────────────────────────────────────────────────────────
-function startGDriveOAuth(){
-  const redirect = encodeURIComponent(window.location.href.split('#')[0]);
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GDRIVE_CLIENT_ID}&redirect_uri=${redirect}&response_type=token&scope=${encodeURIComponent(GDRIVE_SCOPE)}&state=gdrive`;
-  window.location.href = url;
+// ── Google Drive OAuth + silent refresh via GIS ───────────────────────────────
+function _initGDriveTokenClient() {
+  if (!window.google?.accounts?.oauth2 || gdriveTokenClient) return !!gdriveTokenClient;
+  gdriveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GDRIVE_CLIENT_ID,
+    scope: GDRIVE_SCOPE,
+    callback: (response) => {
+      const resolve = gdrivePendingResolve;
+      const reject  = gdrivePendingReject;
+      gdrivePendingResolve = null;
+      gdrivePendingReject  = null;
+      if (response.error) {
+        if (reject) reject(new Error('Google Drive session expired. Please reconnect.'));
+        return;
+      }
+      gdriveToken = response.access_token;
+      gdriveTokenExpiry = Date.now() + (parseInt(response.expires_in) || 3599) * 1000;
+      localStorage.setItem('gdrive_token', gdriveToken);
+      localStorage.setItem('gdrive_token_expiry', String(gdriveTokenExpiry));
+      if (resolve) resolve(gdriveToken);
+      renderDbxPanel();
+      updateDbxButtons();
+    },
+  });
+  return true;
+}
+
+async function _doGDriveRefresh() {
+  if (gdriveRefreshPromise) return gdriveRefreshPromise;
+  gdriveRefreshPromise = new Promise((resolve, reject) => {
+    if (!_initGDriveTokenClient()) {
+      reject(new Error('Google Drive session expired. Please reconnect.'));
+      return;
+    }
+    gdrivePendingResolve = resolve;
+    gdrivePendingReject  = reject;
+    gdriveTokenClient.requestAccessToken({ prompt: '' });
+  }).finally(() => { gdriveRefreshPromise = null; });
+  return gdriveRefreshPromise;
+}
+
+async function _ensureGDriveToken() {
+  if (!gdriveToken) throw new Error('Not connected to Google Drive');
+  const buffer = 5 * 60 * 1000;
+  if (gdriveTokenExpiry && Date.now() > gdriveTokenExpiry - buffer) {
+    await _doGDriveRefresh();
+  }
+}
+
+async function _withGDriveAuth(fn) {
+  try {
+    return await fn();
+  } catch(e) {
+    if (/401|UNAUTHENTICATED|invalid.authentication/i.test(e.message)) {
+      await _doGDriveRefresh();
+      return fn();
+    }
+    throw e;
+  }
+}
+
+function startGDriveOAuth() {
+  const redirect = encodeURIComponent(_appBaseUrl());
+  window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GDRIVE_CLIENT_ID}&redirect_uri=${redirect}&response_type=token&scope=${encodeURIComponent(GDRIVE_SCOPE)}&state=gdrive`;
 }
 
 async function gdriveGetOrCreateFolder(token) {
@@ -1608,24 +1719,30 @@ async function gdriveUploadText(token, filename, text) {
 
 async function handleGDriveSave() {
   gdriveStatus = 'saving'; gdriveMessage = 'Saving to Google Drive…'; renderDbxPanel();
-  try {
-    // 1. Save machine-readable restore file
+  const doSave = async () => {
     await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
-    // 2. Save each list as a readable .txt file
     for (const list of lists) {
       await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
     }
+  };
+  try {
+    await _ensureGDriveToken();
+    await _withGDriveAuth(doSave);
     gdriveStatus = 'saved'; gdriveMessage = '✓ Saved to Google Drive!';
     updateBackupTimestamp();
     setTimeout(() => { gdriveStatus = null; gdriveMessage = ''; renderDbxPanel(); }, 3000);
-  } catch(e) { gdriveStatus = 'error'; gdriveMessage = 'Error: ' + e.message; }
+  } catch(e) {
+    gdriveStatus = 'error';
+    gdriveMessage = /reconnect/i.test(e.message) ? e.message : 'Error: ' + e.message;
+  }
   renderDbxPanel();
 }
 
 async function handleGDriveRestore() {
   gdriveStatus = 'restoring'; gdriveMessage = 'Restoring from Google Drive…'; renderDbxPanel();
   try {
-    const data = await gdriveDownload(gdriveToken);
+    await _ensureGDriveToken();
+    const data = await _withGDriveAuth(() => gdriveDownload(gdriveToken));
     if (data && data.lists) {
       lists = data.lists;
       nextListId = data.nextListId || 100;
@@ -1636,23 +1753,82 @@ async function handleGDriveRestore() {
     }
   } catch(e) {
     gdriveStatus = 'error';
-    gdriveMessage = e.message.includes('not_found') ? 'No backup found in Google Drive yet.' : 'Error: ' + e.message;
+    gdriveMessage = /reconnect/i.test(e.message) ? e.message : (e.message.includes('not_found') ? 'No backup found in Google Drive yet.' : 'Error: ' + e.message);
   }
   renderDbxPanel();
 }
 
 function handleGDriveDisconnect() {
   localStorage.removeItem('gdrive_token');
-  gdriveToken = null; gdriveStatus = null; gdriveMessage = '';
+  localStorage.removeItem('gdrive_token_expiry');
+  gdriveToken = null; gdriveTokenExpiry = 0;
+  gdriveStatus = null; gdriveMessage = '';
+  gdrivePendingResolve = null; gdrivePendingReject = null; gdriveRefreshPromise = null;
   renderDbxPanel();
 }
-function startDropboxOAuth(){
-  const red=encodeURIComponent(window.location.href.split('#')[0]);
-  window.location.href=`https://www.dropbox.com/oauth2/authorize?client_id=${DROPBOX_APP_KEY}&response_type=token&redirect_uri=${red}`;
+function startDropboxOAuth() {
+  (async () => {
+    const verifier = _pkceRandStr(64);
+    const challenge = await _pkceChallenge(verifier);
+    sessionStorage.setItem('dbx_pkce_verifier', verifier);
+    const redirect = encodeURIComponent(_appBaseUrl());
+    window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${DROPBOX_APP_KEY}&response_type=code&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&token_access_type=offline&redirect_uri=${redirect}`;
+  })();
+}
+
+async function _exchangeDropboxCode(code, verifier) {
+  try {
+    const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ code, grant_type: 'authorization_code', client_id: DROPBOX_APP_KEY, redirect_uri: _appBaseUrl(), code_verifier: verifier }),
+    });
+    const data = await res.json();
+    if (!data.access_token) throw new Error(data.error_description || 'Token exchange failed');
+    dbxToken = data.access_token;
+    dbxRefreshToken = data.refresh_token || null;
+    dbxTokenExpiry = data.expires_in ? Date.now() + data.expires_in * 1000 : 0;
+    localStorage.setItem('dbx_token', dbxToken);
+    if (dbxRefreshToken) localStorage.setItem('dbx_refresh_token', dbxRefreshToken);
+    localStorage.setItem('dbx_token_expiry', String(dbxTokenExpiry));
+  } catch(e) {
+    dbxStatus = 'error';
+    dbxMessage = 'Connection failed: ' + e.message;
+  }
+}
+
+async function _refreshDropboxToken() {
+  if (!dbxRefreshToken) throw new Error('No refresh token — please reconnect Dropbox.');
+  const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: dbxRefreshToken, client_id: DROPBOX_APP_KEY }),
+  });
+  if (!res.ok) {
+    handleDisconnect();
+    throw new Error('Dropbox session expired. Please reconnect.');
+  }
+  const data = await res.json();
+  dbxToken = data.access_token;
+  dbxTokenExpiry = data.expires_in ? Date.now() + data.expires_in * 1000 : 0;
+  localStorage.setItem('dbx_token', dbxToken);
+  localStorage.setItem('dbx_token_expiry', String(dbxTokenExpiry));
+}
+
+async function _ensureDropboxToken() {
+  if (!dbxToken) throw new Error('Not connected to Dropbox');
+  const buffer = 5 * 60 * 1000;
+  if (dbxTokenExpiry && Date.now() > dbxTokenExpiry - buffer) {
+    if (!dbxRefreshPromise) {
+      dbxRefreshPromise = _refreshDropboxToken().finally(() => { dbxRefreshPromise = null; });
+    }
+    await dbxRefreshPromise;
+  }
 }
 async function handleBackup(){
   dbxStatus='saving';dbxMessage='Saving to Dropbox…';renderDbxPanel();
   try{
+    await _ensureDropboxToken();
     // 1. Save machine-readable restore file
     const res=await dbxUpload(DROPBOX_BACKUP_PATH, {lists,nextListId,nextItemId,savedAt:new Date().toISOString()});
     if(!res.ok) throw new Error(await res.text());
@@ -1664,16 +1840,25 @@ async function handleBackup(){
     dbxStatus='saved';dbxMessage='✓ Saved to Dropbox!';
     updateBackupTimestamp();
     setTimeout(()=>{dbxStatus=null;dbxMessage='';renderDbxPanel();},3000);
-  }catch(err){dbxStatus='error';dbxMessage='Error: '+err.message;}
+  }catch(err){
+    dbxStatus='error';
+    dbxMessage=/reconnect/i.test(err.message) ? err.message : 'Error: '+err.message;
+  }
   renderDbxPanel();
 }
 async function handleRestore(){
   dbxStatus='restoring';dbxMessage='Restoring from Dropbox…';renderDbxPanel();
   try{
-    const res=await fetch('https://content.dropboxapi.com/2/files/download',{
+    await _ensureDropboxToken();
+    const doDownload = () => fetch('https://content.dropboxapi.com/2/files/download',{
       method:'POST',
       headers:{'Authorization':`Bearer ${dbxToken}`,'Dropbox-API-Arg':JSON.stringify({path:DROPBOX_BACKUP_PATH})},
     });
+    let res = await doDownload();
+    if (res.status === 401 && dbxRefreshToken) {
+      await _refreshDropboxToken();
+      res = await doDownload();
+    }
     if(!res.ok) throw new Error(await res.text());
     const data=await res.json();
     if(data&&data.lists){
@@ -1684,10 +1869,20 @@ async function handleRestore(){
       setTimeout(()=>{dbxStatus=null;dbxMessage='';renderDbxPanel();},4000);
       renderDetailScreen(); renderListsScreen();
     }
-  }catch(err){dbxStatus='error';dbxMessage=err.message.includes('not_found')?'No backup found yet.':'Error: '+err.message;}
+  }catch(err){
+    dbxStatus='error';
+    dbxMessage=/reconnect/i.test(err.message) ? err.message : (err.message.includes('not_found')?'No backup found yet.':'Error: '+err.message);
+  }
   renderDbxPanel();
 }
-function handleDisconnect(){localStorage.removeItem('dbx_token');dbxToken=null;dbxStatus=null;dbxMessage='';renderDbxPanel();}
+function handleDisconnect(){
+  localStorage.removeItem('dbx_token');
+  localStorage.removeItem('dbx_refresh_token');
+  localStorage.removeItem('dbx_token_expiry');
+  dbxToken=null; dbxRefreshToken=null; dbxTokenExpiry=0;
+  dbxRefreshPromise=null; dbxStatus=null; dbxMessage='';
+  renderDbxPanel();
+}
 function updateDbxButtons() {
   const btn = document.getElementById('dbx-open-btn');
   const homeBtn = document.getElementById('dbx-open-btn-home');
@@ -1762,6 +1957,7 @@ function renderDbxPanel(){
 load();
 showListsScreen();
 updateDbxButtons();
+_initGDriveTokenClient();
 </script>
 </body>
 </html>
