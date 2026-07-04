@@ -174,10 +174,10 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 #detail-screen.slide-back{animation:slideInLeft 0.28s ease}
 
 /* Nav bar */
-.navbar{display:flex;align-items:center;padding:12px 16px 8px;flex-shrink:0;gap:8px}
-.back-btn{background:none;border:none;color:#007aff;font-size:16px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:6px 8px;margin-left:-8px;border-radius:10px;white-space:nowrap}
+.navbar{position:relative;display:flex;align-items:center;padding:12px 16px 8px;flex-shrink:0}
+.back-btn{background:none;border:none;color:#007aff;font-size:16px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:6px 8px;margin-left:-8px;border-radius:10px;white-space:nowrap;flex-shrink:0}
 .back-btn svg{flex-shrink:0}
-.navbar-title{flex:1;text-align:center;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navbar-title{position:absolute;left:50%;transform:translateX(-50%);font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%;pointer-events:none}
 .dbx-nav-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:5px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;transition:background 0.2s;white-space:nowrap}
 .dbx-nav-btn.connected{background:rgba(0,97,255,0.2);border-color:rgba(0,97,255,0.5);color:#7ab8ff}
 
@@ -310,7 +310,7 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 .dbx-path-note{color:rgba(255,255,255,0.3);font-size:12px;margin-bottom:14px;line-height:1.5}
 .dbx-path-note code{color:rgba(255,255,255,0.5)}
 .green-dot{width:8px;height:8px;border-radius:50%;background:#34c759;flex-shrink:0}
-.more-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:12px;padding:10px 16px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:16px;letter-spacing:2px;line-height:1;transition:background 0.15s}
+.more-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:13px;letter-spacing:2px;line-height:1;transition:background 0.15s;display:flex;align-items:center}
 .more-btn:active{background:rgba(255,255,255,0.18)}
 .sort-lists-opt{width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:-apple-system,sans-serif}
 .sort-lists-opt.active{color:#007aff;font-weight:600}
@@ -332,6 +332,7 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <button class="more-btn" onclick="openListsMenu()" title="More options">•••</button>
       <button class="search-icon-btn" id="lists-search-toggle-btn" onclick="toggleListsSearch()" aria-label="Search">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
@@ -364,6 +365,19 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
     <!-- List cards -->
     <div id="lists-container" style="margin:0 20px"></div>
 
+  </div>
+</div>
+
+<!-- Lists screen ••• menu -->
+<div id="lists-menu-overlay" onclick="closeListsMenu()" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);animation:fadeIn 0.15s ease">
+  <div id="lists-menu-sheet" onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
+    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
+      <div style="padding:14px 16px 10px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Options</div>
+      <button onclick="closeListsMenu();openSortListsSheet();" style="width:100%;padding:16px;background:none;border:none;cursor:pointer;color:#fff;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
+        ↕️ Sort Lists
+      </button>
+    </div>
+    <button onclick="closeListsMenu()" style="width:100%;padding:16px;background:rgba(40,44,70,0.98);border:none;border-radius:16px;cursor:pointer;color:#fff;font-size:17px;font-weight:600">Cancel</button>
   </div>
 </div>
 
@@ -406,23 +420,21 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
       Lists
     </button>
     <div class="navbar-title" id="navbar-title"></div>
-    <button class="dbx-nav-btn" id="dbx-open-btn" onclick="openDbxPanel()">
-      <span id="dbx-btn-label">☁️ Backup</span>
-    </button>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+      <button class="more-btn" onclick="openListMenu()" title="More options">•••</button>
+      <button class="search-icon-btn" id="detail-search-toggle-btn" onclick="toggleDetailSearch()" aria-label="Search">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+      <button class="dbx-nav-btn" id="dbx-open-btn" onclick="openDbxPanel()">
+        <span id="dbx-btn-label">☁️ Backup</span>
+      </button>
+    </div>
   </div>
 
   <div class="list-hero">
     <div class="list-hero-icon" id="hero-icon"></div>
     <h1 id="hero-title"></h1>
     <div class="sub" id="hero-sub"></div>
-  </div>
-
-  <!-- ••• and search icon row -->
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 6px">
-    <button class="more-btn" onclick="openListMenu()" title="More options">•••</button>
-    <button class="search-icon-btn" id="detail-search-toggle-btn" onclick="toggleDetailSearch()" aria-label="Search">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
-    </button>
   </div>
 
   <!-- Search bar (collapsible) -->
@@ -841,6 +853,9 @@ function clearListsSearch(){
 function openDbxPanel(){document.getElementById('dbx-overlay').classList.add('open');renderDbxPanel();}
 
 let listsSort = 'dateAdded'; // dateAdded | dateModified | nameAZ | nameZA
+
+function openListsMenu(){ document.getElementById('lists-menu-overlay').style.display='block'; }
+function closeListsMenu(){ document.getElementById('lists-menu-overlay').style.display='none'; }
 
 function openSortListsSheet(){
   document.getElementById('sort-lists-overlay').style.display='flex';
