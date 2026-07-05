@@ -180,6 +180,7 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 .navbar-title{position:absolute;left:50%;transform:translateX(-50%);font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%;pointer-events:none}
 .dbx-nav-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:5px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;transition:background 0.2s;white-space:nowrap}
 .dbx-nav-btn.connected{background:rgba(0,97,255,0.2);border-color:rgba(0,97,255,0.5);color:#7ab8ff}
+.dbx-nav-btn.error{background:rgba(255,59,48,0.2);border-color:rgba(255,59,48,0.5);color:#ff6b6b}
 
 .search-icon-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s}
 .search-icon-btn.active{background:rgba(0,122,255,0.2);border-color:rgba(0,122,255,0.5)}
@@ -595,6 +596,7 @@ let dbxTokenExpiry = 0;
 let dbxRefreshPromise = null;
 let dbxStatus = null;
 let dbxMessage = '';
+let backupError = null; // null = OK, string = last error message
 
 // ── Default lists so the app isn't empty on first launch
 const DEFAULT_LISTS = [];
@@ -677,21 +679,30 @@ function updateBackupTimestamp() {
 function updateBackupButtonLabel() {
   const lbl = document.getElementById('dbx-btn-label');
   const homeLbl = document.getElementById('dbx-home-label');
-  const connected = dbxToken || gdriveToken;
-  let text = '☁️ Backup';
-  if (connected && lastBackupTime) {
-    const d = new Date(lastBackupTime);
-    const now = new Date();
-    const diffMin = Math.round((now - d) / 60000);
-    let timeStr;
-    if (diffMin < 1) timeStr = 'just now';
-    else if (diffMin < 60) timeStr = diffMin + 'm ago';
-    else if (diffMin < 1440) timeStr = Math.round(diffMin/60) + 'h ago';
-    else timeStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
-    text = '☁️ ' + timeStr;
+  const btn = document.getElementById('dbx-open-btn');
+  const homeBtn = document.getElementById('dbx-open-btn-home');
+  let text, isError = !!backupError;
+  if (backupError) {
+    text = /reconnect/i.test(backupError) ? '⚠︎ Reconnect' : '⚠︎ Sync failed';
+  } else {
+    const connected = dbxToken || gdriveToken;
+    text = '☁️ Backup';
+    if (connected && lastBackupTime) {
+      const d = new Date(lastBackupTime);
+      const now = new Date();
+      const diffMin = Math.round((now - d) / 60000);
+      let timeStr;
+      if (diffMin < 1) timeStr = 'just now';
+      else if (diffMin < 60) timeStr = diffMin + 'm ago';
+      else if (diffMin < 1440) timeStr = Math.round(diffMin/60) + 'h ago';
+      else timeStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+      text = '☁️ ' + timeStr;
+    }
   }
   if (lbl) lbl.textContent = text;
   if (homeLbl) homeLbl.textContent = text;
+  if (btn) btn.classList.toggle('error', isError);
+  if (homeBtn) homeBtn.classList.toggle('error', isError);
 }
 
 let autoBackupTimer = null;
@@ -717,8 +728,12 @@ function scheduleAutoBackup() {
           }
         });
       }
+      backupError = null;
       updateBackupTimestamp();
-    } catch(e) {}
+    } catch(e) {
+      backupError = e.message || 'Backup failed';
+      updateBackupButtonLabel();
+    }
   }, 3000);
 }
 
@@ -1729,10 +1744,13 @@ async function handleGDriveSave() {
   try {
     await _ensureGDriveToken();
     await _withGDriveAuth(doSave);
+    backupError = null;
     gdriveStatus = 'saved'; gdriveMessage = '✓ Saved to Google Drive!';
     updateBackupTimestamp();
     setTimeout(() => { gdriveStatus = null; gdriveMessage = ''; renderDbxPanel(); }, 3000);
   } catch(e) {
+    backupError = e.message || 'Backup failed';
+    updateBackupButtonLabel();
     gdriveStatus = 'error';
     gdriveMessage = /reconnect/i.test(e.message) ? e.message : 'Error: ' + e.message;
   }
@@ -1765,6 +1783,7 @@ function handleGDriveDisconnect() {
   gdriveToken = null; gdriveTokenExpiry = 0;
   gdriveStatus = null; gdriveMessage = '';
   gdrivePendingResolve = null; gdrivePendingReject = null; gdriveRefreshPromise = null;
+  if (!dbxToken) { backupError = null; updateBackupButtonLabel(); }
   renderDbxPanel();
 }
 function startDropboxOAuth() {
@@ -1838,10 +1857,13 @@ async function handleBackup(){
       const fname=`/Lists/${safeFilename(list.name)}.txt`;
       await dbxUpload(fname, listToText(list), true);
     }
+    backupError = null;
     dbxStatus='saved';dbxMessage='✓ Saved to Dropbox!';
     updateBackupTimestamp();
     setTimeout(()=>{dbxStatus=null;dbxMessage='';renderDbxPanel();},3000);
   }catch(err){
+    backupError = err.message || 'Backup failed';
+    updateBackupButtonLabel();
     dbxStatus='error';
     dbxMessage=/reconnect/i.test(err.message) ? err.message : 'Error: '+err.message;
   }
@@ -1882,6 +1904,7 @@ function handleDisconnect(){
   localStorage.removeItem('dbx_token_expiry');
   dbxToken=null; dbxRefreshToken=null; dbxTokenExpiry=0;
   dbxRefreshPromise=null; dbxStatus=null; dbxMessage='';
+  if (!gdriveToken) { backupError = null; updateBackupButtonLabel(); }
   renderDbxPanel();
 }
 function updateDbxButtons() {
