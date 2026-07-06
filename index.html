@@ -121,6 +121,65 @@
   --error-text:#FF2E97;
   --font-body:'Courier New',Courier,monospace;
 }
+[data-theme="notepad"]{
+  --bg:#FEFDF6;
+  --surface:rgba(0,0,0,0.04);
+  --surface-border:rgba(0,0,0,0.06);
+  --surface-raised:#F5F3E8;
+  --panel-bg:#F5F3E8;
+  --text-heading:#1C1C1E;
+  --text-list-name:#1C1C1E;
+  --text-primary:#1C1C1E;
+  --text-secondary:#8E8E93;
+  --text-tertiary:rgba(28,28,30,0.3);
+  --text-task:#1C1C1E;
+  --text-caption:#8E8E93;
+  --text-section:rgba(28,28,30,0.3);
+  --title-shadow:none;
+  --accent:#F5C518;
+  --accent-gradient:linear-gradient(135deg,#F5C518,#E8B800);
+  --accent-dim:rgba(245,197,24,0.15);
+  --accent-border:rgba(199,160,8,0.4);
+  --accent-shadow:rgba(245,197,24,0.25);
+  --accent-text:#C7A008;
+  --back-btn-color:#C7A008;
+  --pill-bg:rgba(0,0,0,0.05);
+  --pill-border:rgba(0,0,0,0.1);
+  --delete:#ff3b30;
+  --divider:#ECE8DA;
+  --overlay:rgba(0,0,0,0.35);
+  --drop-line:linear-gradient(90deg,#F5C518,#C7A008);
+  --mark-bg:rgba(245,197,24,0.35);
+  --connected-bg:rgba(52,199,89,0.1);
+  --connected-border:rgba(52,199,89,0.4);
+  --connected-text:#2a8a3e;
+  --error-bg:rgba(255,59,48,0.08);
+  --error-border:rgba(255,59,48,0.3);
+  --error-text:#c0392b;
+  --font-body:-apple-system,'Helvetica Neue',sans-serif;
+}
+/* ── Notepad: override hardcoded dark-only colors ── */
+[data-theme="notepad"] .statusbar{color:#8E8E93}
+[data-theme="notepad"] .list-card:active{background:rgba(0,0,0,0.05)}
+[data-theme="notepad"] .done-row{background:rgba(0,0,0,0.025)!important}
+[data-theme="notepad"] .task-text.done{color:rgba(28,28,30,0.3)}
+[data-theme="notepad"] .task-edit-input.done{color:rgba(28,28,30,0.3)}
+[data-theme="notepad"] .caption-input.done{color:rgba(28,28,30,0.25)}
+[data-theme="notepad"] .tip{color:rgba(28,28,30,0.2)}
+[data-theme="notepad"] .modal-handle,[data-theme="notepad"] .dbx-handle{background:rgba(0,0,0,0.12)}
+[data-theme="notepad"] .search-clear{background:rgba(0,0,0,0.08);color:#1C1C1E}
+[data-theme="notepad"] .more-btn:active{background:rgba(0,0,0,0.07)}
+[data-theme="notepad"] .search-icon-btn,[data-theme="notepad"] .theme-picker-btn{color:#C7A008}
+[data-theme="notepad"] .add-item-btn,[data-theme="notepad"] #new-list-btn,[data-theme="notepad"] .modal-create-btn,[data-theme="notepad"] .primary-btn{color:#1C1C1E}
+[data-theme="notepad"] .theme-check,[data-theme="notepad"] .sort-lists-opt.active{color:#C7A008}
+[data-theme="notepad"] .dbx-desc,[data-theme="notepad"] .dbx-step-text{color:rgba(28,28,30,0.6)}
+[data-theme="notepad"] .dbx-path-note{color:rgba(28,28,30,0.4)}
+[data-theme="notepad"] .dbx-path-note code{color:rgba(28,28,30,0.6)}
+[data-theme="notepad"] .dbx-notice.warning .nbody{color:rgba(28,28,30,0.7)}
+[data-theme="notepad"] .dbx-notice.warning .ntitle{color:#C7A008}
+[data-theme="notepad"] .dbx-notice.info{color:#0066cc}
+[data-theme="notepad"] .dbx-step-num{background:rgba(199,160,8,0.15);color:#C7A008}
+[data-theme="notepad"] #new-list-sheet>div[style]{color:rgba(28,28,30,0.4)!important}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
 body{
@@ -427,10 +486,10 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
       <button class="search-icon-btn" id="lists-search-toggle-btn" onclick="toggleListsSearch()" aria-label="Search">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
       <button class="theme-picker-btn" id="theme-picker-toggle" onclick="openThemePicker()" aria-label="Theme">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5C4.96 1.5 2.5 3.96 2.5 7c0 2.21 1.34 4.12 3.27 4.96-.03.16-.27.29-.27.54C5.5 13.38 6.62 14.5 8 14.5c.55 0 1-.45 1-1 0-.26-.1-.48-.24-.67-.16-.19-.26-.43-.26-.67 0-.55.45-1 1-1H10.5c1.93 0 3.5-1.57 3.5-3.5C14 4.19 11.31 1.5 8 1.5z" fill="none" stroke="white" stroke-width="1.3"/><circle cx="5.5" cy="6.5" r="1" fill="white"/><circle cx="8" cy="4.5" r="1" fill="white"/><circle cx="10.5" cy="6.5" r="1" fill="white"/></svg>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5C4.96 1.5 2.5 3.96 2.5 7c0 2.21 1.34 4.12 3.27 4.96-.03.16-.27.29-.27.54C5.5 13.38 6.62 14.5 8 14.5c.55 0 1-.45 1-1 0-.26-.1-.48-.24-.67-.16-.19-.26-.43-.26-.67 0-.55.45-1 1-1H10.5c1.93 0 3.5-1.57 3.5-3.5C14 4.19 11.31 1.5 8 1.5z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="5.5" cy="6.5" r="1" fill="currentColor"/><circle cx="8" cy="4.5" r="1" fill="currentColor"/><circle cx="10.5" cy="6.5" r="1" fill="currentColor"/></svg>
       </button>
       <button class="dbx-nav-btn" id="dbx-open-btn-home" onclick="openDbxPanel()">
         <span id="dbx-home-label">☁️ Backup</span>
@@ -441,7 +500,7 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
   <!-- Collapsible search bar -->
   <div class="search-collapsible" id="lists-search-collapsible">
     <div style="margin:4px 20px 8px;position:relative">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:0.4;pointer-events:none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:0.4;pointer-events:none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       <input type="text" id="lists-search-input" placeholder="Search lists…" oninput="onListsSearch(this)" style="width:100%;box-sizing:border-box;padding:10px 36px;background:var(--pill-bg);border:1.5px solid var(--surface-border);border-radius:12px;color:var(--text-primary);font-size:15px;outline:none;font-family:var(--font-body)"/>
       <button class="search-clear" id="lists-search-clear" onclick="clearListsSearch()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%)">✕</button>
     </div>
@@ -453,7 +512,7 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
     <!-- New List button -->
     <div style="margin:0 20px">
       <button id="new-list-btn" onclick="openNewListModal()" style="width:100%;box-sizing:border-box">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><line x1="10" y1="3" x2="10" y2="17" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="10" x2="17" y2="10" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><line x1="10" y1="3" x2="10" y2="17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="10" x2="17" y2="10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         New List
       </button>
     </div>
@@ -515,10 +574,10 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
     </button>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
       <button class="search-icon-btn" id="detail-search-toggle-btn" onclick="toggleDetailSearch()" aria-label="Search">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
       <button class="theme-picker-btn" onclick="openThemePicker()" aria-label="Theme">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5C4.96 1.5 2.5 3.96 2.5 7c0 2.21 1.34 4.12 3.27 4.96-.03.16-.27.29-.27.54C5.5 13.38 6.62 14.5 8 14.5c.55 0 1-.45 1-1 0-.26-.1-.48-.24-.67-.16-.19-.26-.43-.26-.67 0-.55.45-1 1-1H10.5c1.93 0 3.5-1.57 3.5-3.5C14 4.19 11.31 1.5 8 1.5z" fill="none" stroke="white" stroke-width="1.3"/><circle cx="5.5" cy="6.5" r="1" fill="white"/><circle cx="8" cy="4.5" r="1" fill="white"/><circle cx="10.5" cy="6.5" r="1" fill="white"/></svg>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5C4.96 1.5 2.5 3.96 2.5 7c0 2.21 1.34 4.12 3.27 4.96-.03.16-.27.29-.27.54C5.5 13.38 6.62 14.5 8 14.5c.55 0 1-.45 1-1 0-.26-.1-.48-.24-.67-.16-.19-.26-.43-.26-.67 0-.55.45-1 1-1H10.5c1.93 0 3.5-1.57 3.5-3.5C14 4.19 11.31 1.5 8 1.5z" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="5.5" cy="6.5" r="1" fill="currentColor"/><circle cx="8" cy="4.5" r="1" fill="currentColor"/><circle cx="10.5" cy="6.5" r="1" fill="currentColor"/></svg>
       </button>
       <button class="more-btn" onclick="openListMenu()" title="More options">•••</button>
       <button class="dbx-nav-btn" id="dbx-open-btn" onclick="openDbxPanel()">
@@ -535,7 +594,7 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
   <!-- Search bar (collapsible) -->
   <div class="search-collapsible" id="detail-search-collapsible">
     <div class="search-wrap" style="margin:0 16px 8px">
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="left:16px"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="left:16px"><circle cx="6.5" cy="6.5" r="5" stroke="currentColor" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
       <input type="text" id="search-input" placeholder="Search…"
         oninput="onSearch(this)"
         style="padding-left:36px"/>
@@ -645,6 +704,10 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
       <button onclick="applyTheme('retro')" class="theme-row" id="theme-row-retro">
         <span>👾 Retro Arcade</span>
         <span class="theme-check" id="theme-check-retro" style="display:none">✓</span>
+      </button>
+      <button onclick="applyTheme('notepad')" class="theme-row" id="theme-row-notepad">
+        <span>📒 Notepad</span>
+        <span class="theme-check" id="theme-check-notepad" style="display:none">✓</span>
       </button>
     </div>
     <button onclick="closeThemePicker()" class="sheet-cancel">Done</button>
@@ -1374,9 +1437,13 @@ function updateHeroSub(){
 function renderItemHTML(item, index, q){
   const isImg = !!item.image;
   const rowCls = 'task-row'+(isImg?' is-image':'')+(item.done?' done-row':'');
-  const stroke = item.done?'#fff':'#c7c7cc';
-  const fill   = item.done?'#34c759':'transparent';
-  const checkPath = item.done?`<path d="M7 12.5l3.5 3.5 6.5-7" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`:'';
+  const isNotepad = currentTheme === 'notepad';
+  const doneFill   = isNotepad ? '#F5C518' : '#34c759';
+  const doneBorder = isNotepad ? '#E8B800' : '#fff';
+  const doneCheck  = isNotepad ? '#1C1C1E' : '#fff';
+  const stroke = item.done ? doneBorder : '#c7c7cc';
+  const fill   = item.done ? doneFill : 'transparent';
+  const checkPath = item.done?`<path d="M7 12.5l3.5 3.5 6.5-7" stroke="${doneCheck}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`:'';
   const checkSVG = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="11" stroke="${stroke}" stroke-width="1.5" fill="${fill}"/>${checkPath}</svg>`;
 
   let content='';
@@ -2114,7 +2181,7 @@ function renderDbxPanel(){
 // ══════════════════════════════════════════
 //  THEME
 // ══════════════════════════════════════════
-const THEMES = ['classic', 'retro'];
+const THEMES = ['classic', 'retro', 'notepad'];
 let currentTheme = localStorage.getItem('app_theme') || 'classic';
 
 function applyTheme(id) {
