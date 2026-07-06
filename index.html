@@ -730,7 +730,12 @@ async function dbxUpload(path, content, isText) {
   });
   let res = await doFetch();
   if (res.status === 401 && dbxRefreshToken) {
-    try { await _refreshDropboxToken(); res = await doFetch(); } catch(e) {}
+    await _refreshDropboxToken();
+    res = await doFetch();
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Dropbox upload failed (${res.status}): ${body || res.statusText}`);
   }
   return res;
 }
@@ -818,35 +823,47 @@ function updateBackupButtonLabel() {
 }
 
 let autoBackupTimer = null;
+
+async function _runAutoBackup() {
+  try {
+    if (dbxToken) {
+      await _ensureDropboxToken();
+      await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
+      for (const list of lists) {
+        const fname = `/Lists/${safeFilename(list.name)}.txt`;
+        await dbxUpload(fname, listToText(list), true);
+      }
+    }
+    if (gdriveToken) {
+      await _ensureGDriveToken();
+      await _withGDriveAuth(async () => {
+        await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+        for (const list of lists) {
+          await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
+        }
+      });
+    }
+    backupError = null;
+    updateBackupTimestamp();
+  } catch(e) {
+    backupError = e.message || 'Backup failed';
+    updateBackupButtonLabel();
+  }
+}
+
 function scheduleAutoBackup() {
   if (!dbxToken && !gdriveToken) return; // need at least one
   clearTimeout(autoBackupTimer);
-  autoBackupTimer = setTimeout(async () => {
-    try {
-      if (dbxToken) {
-        await _ensureDropboxToken();
-        await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
-        for (const list of lists) {
-          const fname = `/Lists/${safeFilename(list.name)}.txt`;
-          await dbxUpload(fname, listToText(list), true);
-        }
-      }
-      if (gdriveToken) {
-        await _ensureGDriveToken();
-        await _withGDriveAuth(async () => {
-          await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
-          for (const list of lists) {
-            await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
-          }
-        });
-      }
-      backupError = null;
-      updateBackupTimestamp();
-    } catch(e) {
-      backupError = e.message || 'Backup failed';
-      updateBackupButtonLabel();
-    }
-  }, 3000);
+  autoBackupTimer = setTimeout(() => { autoBackupTimer = null; _runAutoBackup(); }, 3000);
+}
+
+// If the app is about to be backgrounded/closed, don't lose a pending backup —
+// mobile browsers routinely drop unfired setTimeout callbacks on suspend.
+function flushAutoBackup() {
+  if (!autoBackupTimer) return;
+  clearTimeout(autoBackupTimer);
+  autoBackupTimer = null;
+  _runAutoBackup();
 }
 
 function save() {
@@ -1733,6 +1750,7 @@ function _initGDriveTokenClient() {
 
 async function _doGDriveRefresh() {
   if (gdriveRefreshPromise) return gdriveRefreshPromise;
+  let timeoutId = null;
   gdriveRefreshPromise = new Promise((resolve, reject) => {
     if (!_initGDriveTokenClient()) {
       reject(new Error('Google Drive session expired. Please reconnect.'));
@@ -1740,8 +1758,19 @@ async function _doGDriveRefresh() {
     }
     gdrivePendingResolve = resolve;
     gdrivePendingReject  = reject;
+    // Safari/GIS silent refresh can hang indefinitely (blocked cookies, ITP).
+    // Bail out after 10s so callers see an error instead of a stuck promise.
+    timeoutId = setTimeout(() => {
+      const r = gdrivePendingReject;
+      gdrivePendingResolve = null;
+      gdrivePendingReject  = null;
+      if (r) r(new Error('Google Drive session expired. Please reconnect.'));
+    }, 10000);
     gdriveTokenClient.requestAccessToken({ prompt: '' });
-  }).finally(() => { gdriveRefreshPromise = null; });
+  }).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+    gdriveRefreshPromise = null;
+  });
   return gdriveRefreshPromise;
 }
 
@@ -1842,7 +1871,12 @@ async function gdriveUploadText(token, filename, text) {
   const url = existingId
     ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart`
     : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
-  return fetch(url, { method: existingId ? 'PATCH' : 'POST', headers: { 'Authorization': `Bearer ${token}` }, body });
+  const res = await fetch(url, { method: existingId ? 'PATCH' : 'POST', headers: { 'Authorization': `Bearer ${token}` }, body });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`Google Drive upload failed for ${filename} (${res.status}): ${errBody || res.statusText}`);
+  }
+  return res;
 }
 
 async function handleGDriveSave() {
@@ -1962,8 +1996,7 @@ async function handleBackup(){
   try{
     await _ensureDropboxToken();
     // 1. Save machine-readable restore file
-    const res=await dbxUpload(DROPBOX_BACKUP_PATH, {lists,nextListId,nextItemId,savedAt:new Date().toISOString()});
-    if(!res.ok) throw new Error(await res.text());
+    await dbxUpload(DROPBOX_BACKUP_PATH, {lists,nextListId,nextItemId,savedAt:new Date().toISOString()});
     // 2. Save each list as a readable .txt file in a Lists/ folder
     for(const list of lists){
       const fname=`/Lists/${safeFilename(list.name)}.txt`;
@@ -2135,6 +2168,11 @@ load();
 showListsScreen();
 updateDbxButtons();
 _initGDriveTokenClient();
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushAutoBackup();
+});
+window.addEventListener('pagehide', flushAutoBackup);
 </script>
 </body>
 </html>
