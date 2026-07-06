@@ -42,15 +42,91 @@
 })();
 </script>
 
+<script>(function(){var t=localStorage.getItem('app_theme');if(t&&t!=='classic')document.documentElement.dataset.theme=t;})()</script>
 <script src="https://accounts.google.com/gsi/client" async></script>
 
 <style>
+/* ── Theme variables ─────────────────────────────────────────────────────── */
+:root{
+  --bg:linear-gradient(160deg,#1a1a2e 0%,#16213e 40%,#0f3460 100%);
+  --surface:rgba(255,255,255,0.07);
+  --surface-border:rgba(255,255,255,0.08);
+  --surface-raised:rgba(40,44,70,0.98);
+  --panel-bg:linear-gradient(160deg,#1c2340,#1a2a4a);
+  --text-heading:#fff;
+  --text-list-name:#fff;
+  --text-primary:#fff;
+  --text-secondary:rgba(255,255,255,0.4);
+  --text-tertiary:rgba(255,255,255,0.25);
+  --text-task:rgba(255,255,255,0.92);
+  --text-caption:rgba(255,255,255,0.65);
+  --text-section:rgba(255,255,255,0.3);
+  --title-shadow:none;
+  --accent:#007aff;
+  --accent-gradient:linear-gradient(135deg,#007aff,#5856d6);
+  --accent-dim:rgba(0,122,255,0.2);
+  --accent-border:rgba(0,122,255,0.5);
+  --accent-shadow:rgba(0,122,255,0.35);
+  --accent-text:#7ab8ff;
+  --back-btn-color:#007aff;
+  --pill-bg:rgba(255,255,255,0.08);
+  --pill-border:rgba(255,255,255,0.12);
+  --delete:#ff3b30;
+  --divider:rgba(255,255,255,0.08);
+  --overlay:rgba(0,0,0,0.6);
+  --drop-line:linear-gradient(90deg,#007aff,#5856d6);
+  --mark-bg:rgba(0,122,255,0.45);
+  --connected-bg:rgba(0,97,255,0.2);
+  --connected-border:rgba(0,97,255,0.5);
+  --connected-text:#7ab8ff;
+  --error-bg:rgba(255,59,48,0.2);
+  --error-border:rgba(255,59,48,0.5);
+  --error-text:#ff6b6b;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
+}
+[data-theme="retro"]{
+  --bg:#14061F;
+  --surface:rgba(36,16,58,0.9);
+  --surface-border:#7B2FFF;
+  --surface-raised:#1a0830;
+  --panel-bg:#1a0830;
+  --text-heading:#00F0FF;
+  --text-list-name:#FFE600;
+  --text-primary:#fff;
+  --text-secondary:rgba(0,240,255,0.6);
+  --text-tertiary:rgba(0,240,255,0.3);
+  --text-task:#FFE600;
+  --text-caption:rgba(255,230,0,0.7);
+  --text-section:rgba(0,240,255,0.5);
+  --title-shadow:0 0 20px rgba(0,240,255,0.5);
+  --accent:#FF2E97;
+  --accent-gradient:linear-gradient(135deg,#FF2E97,#7B2FFF);
+  --accent-dim:rgba(255,46,151,0.15);
+  --accent-border:rgba(255,46,151,0.5);
+  --accent-shadow:rgba(255,46,151,0.4);
+  --accent-text:#FF2E97;
+  --back-btn-color:#00F0FF;
+  --pill-bg:rgba(123,47,255,0.2);
+  --pill-border:#7B2FFF;
+  --delete:#FF2E97;
+  --divider:rgba(123,47,255,0.4);
+  --overlay:rgba(0,0,0,0.85);
+  --drop-line:linear-gradient(90deg,#FF2E97,#7B2FFF);
+  --mark-bg:rgba(0,240,255,0.25);
+  --connected-bg:rgba(57,255,20,0.15);
+  --connected-border:rgba(57,255,20,0.5);
+  --connected-text:#39FF14;
+  --error-bg:rgba(255,46,151,0.15);
+  --error-border:rgba(255,46,151,0.5);
+  --error-text:#FF2E97;
+  --font-body:'Courier New',Courier,monospace;
+}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
 body{
-  background:linear-gradient(160deg,#1a1a2e 0%,#16213e 40%,#0f3460 100%);
-  font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
-  color:#fff;
+  background:var(--bg);
+  font-family:var(--font-body);
+  color:var(--text-primary);
   -webkit-tap-highlight-color:transparent;
   -webkit-user-select:none;
   user-select:none;
@@ -59,7 +135,7 @@ body{
 }
 input,textarea{-webkit-user-select:text;user-select:text}
 input{-webkit-appearance:none}
-input::placeholder{color:rgba(255,255,255,0.3)}
+input::placeholder{color:var(--text-tertiary)}
 
 @keyframes fadeIn  {from{opacity:0}to{opacity:1}}
 @keyframes slideUp {from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -86,15 +162,15 @@ input::placeholder{color:rgba(255,255,255,0.3)}
    LISTS SCREEN
 ══════════════════════════════════════ */
 #lists-screen .header{padding:28px 24px 16px;flex-shrink:0}
-#lists-screen .header h1{font-size:34px;font-weight:700;letter-spacing:-1px;color:#fff;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
-#lists-screen .header .sub{margin-top:4px;font-size:14px;color:rgba(255,255,255,0.4)}
+#lists-screen .header h1{font-size:34px;font-weight:700;letter-spacing:-1px;color:var(--text-heading);font-family:var(--font-body);text-shadow:var(--title-shadow)}
+#lists-screen .header .sub{margin-top:4px;font-size:14px;color:var(--text-secondary)}
 
 /* List cards */
 #lists-container{padding:0;}
 .list-card{
   display:flex;align-items:center;gap:14px;
-  background:rgba(255,255,255,0.07);
-  border:1.5px solid rgba(255,255,255,0.08);
+  background:var(--surface);
+  border:1.5px solid var(--surface-border);
   border-radius:18px;margin-bottom:12px;
   padding:18px 16px;cursor:pointer;
   transition:background 0.15s,transform 0.12s;
@@ -104,24 +180,24 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 .list-card:active{background:rgba(255,255,255,0.13);transform:scale(0.98)}
 .list-card-icon{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
 .list-card-info{flex:1;min-width:0}
-.list-card-name{font-size:17px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.list-card-count{font-size:13px;color:rgba(255,255,255,0.4);margin-top:2px}
-.list-card-chevron{color:rgba(255,255,255,0.25);font-size:18px;flex-shrink:0}
+.list-card-name{font-size:17px;font-weight:600;color:var(--text-list-name);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list-card-count{font-size:13px;color:var(--text-secondary);margin-top:2px}
+.list-card-chevron{color:var(--text-tertiary);font-size:18px;flex-shrink:0}
 /* Swipe-delete styles removed */
 
 /* List card swipe-to-delete */
 .lc-wrap{position:relative;margin-bottom:12px;border-radius:18px;overflow:hidden}
 .lc-del-bg{
   position:absolute;right:0;top:0;bottom:0;width:90px;
-  background:#ff3b30;display:flex;align-items:center;justify-content:center;
+  background:var(--delete);display:flex;align-items:center;justify-content:center;
   border-radius:0 18px 18px 0;
   opacity:0;transition:opacity 0.15s;
 }
 .lc-del-bg span{color:#fff;font-size:13px;font-weight:700;letter-spacing:0.2px}
 .list-card{
   display:flex;align-items:center;gap:14px;
-  background:rgba(255,255,255,0.07);
-  border:1.5px solid rgba(255,255,255,0.08);
+  background:var(--surface);
+  border:1.5px solid var(--surface-border);
   border-radius:18px;margin-bottom:0;
   padding:18px 16px;cursor:pointer;
   transition:background 0.15s;
@@ -131,11 +207,11 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 .list-card:active{background:rgba(255,255,255,0.13)}
 #new-list-btn{
   margin:0;flex-shrink:0;
-  background:linear-gradient(135deg,#007aff,#5856d6);
+  background:var(--accent-gradient);
   border:none;border-radius:16px;padding:16px;
   color:#fff;font-size:16px;font-weight:600;cursor:pointer;
   display:flex;align-items:center;justify-content:center;gap:8px;
-  box-shadow:0 4px 20px rgba(0,122,255,0.35);
+  box-shadow:0 4px 20px var(--accent-shadow);
   transition:transform 0.12s;
   width:100%;box-sizing:border-box;
 }
@@ -144,28 +220,28 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 /* New list modal */
 #new-list-modal{
   display:none;position:fixed;inset:0;z-index:200;
-  background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);
+  background:var(--overlay);backdrop-filter:blur(8px);
   align-items:flex-end;justify-content:center;
   animation:fadeIn 0.18s ease;
 }
 #new-list-modal.open{display:flex}
 #new-list-sheet{
   width:100%;max-width:430px;
-  background:linear-gradient(160deg,#1c2340,#1a2a4a);
+  background:var(--panel-bg);
   border-radius:24px 24px 0 0;padding:28px 24px;
   padding-bottom:max(28px,env(safe-area-inset-bottom));
   animation:slideUp 0.22s ease;
 }
 .modal-handle{width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:0 auto 20px}
 .modal-title{font-size:20px;font-weight:700;margin-bottom:20px;text-align:center}
-.modal-field{width:100%;background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.2);border-radius:14px;padding:14px 16px;color:#fff;font-size:16px;outline:none;margin-bottom:14px;display:block}
-.modal-field:focus{border-color:rgba(0,122,255,0.6)}
+.modal-field{width:100%;background:var(--surface);border:1.5px solid var(--pill-border);border-radius:14px;padding:14px 16px;color:var(--text-primary);font-size:16px;outline:none;margin-bottom:14px;display:block;font-family:var(--font-body)}
+.modal-field:focus{border-color:var(--accent-border)}
 /* Emoji picker */
 .emoji-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}
-.emoji-opt{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,0.08);border:2px solid transparent;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s}
-.emoji-opt.selected{border-color:#007aff;background:rgba(0,122,255,0.2)}
-.modal-create-btn{width:100%;padding:15px;background:linear-gradient(135deg,#007aff,#5856d6);border:none;border-radius:14px;cursor:pointer;color:#fff;font-size:16px;font-weight:600;box-shadow:0 4px 16px rgba(0,122,255,0.35)}
-.modal-cancel-btn{width:100%;padding:12px;background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.5);font-size:15px;margin-top:8px}
+.emoji-opt{width:44px;height:44px;border-radius:12px;background:var(--pill-bg);border:2px solid transparent;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.15s}
+.emoji-opt.selected{border-color:var(--accent);background:var(--accent-dim)}
+.modal-create-btn{width:100%;padding:15px;background:var(--accent-gradient);border:none;border-radius:14px;cursor:pointer;color:#fff;font-size:16px;font-weight:600;box-shadow:0 4px 16px var(--accent-shadow)}
+.modal-cancel-btn{width:100%;padding:12px;background:none;border:none;cursor:pointer;color:var(--text-secondary);font-size:15px;margin-top:8px}
 
 /* ══════════════════════════════════════
    DETAIL SCREEN
@@ -175,38 +251,38 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 
 /* Nav bar */
 .navbar{position:relative;display:flex;align-items:center;padding:12px 16px 8px;flex-shrink:0}
-.back-btn{background:none;border:none;color:#007aff;font-size:16px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:6px 8px;margin-left:-8px;border-radius:10px;white-space:nowrap;flex-shrink:0}
+.back-btn{background:none;border:none;color:var(--back-btn-color);font-size:16px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:4px;padding:6px 8px;margin-left:-8px;border-radius:10px;white-space:nowrap;flex-shrink:0}
 .back-btn svg{flex-shrink:0}
 .navbar-title{position:absolute;left:50%;transform:translateX(-50%);font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%;pointer-events:none}
-.dbx-nav-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:5px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;transition:background 0.2s;white-space:nowrap}
-.dbx-nav-btn.connected{background:rgba(0,97,255,0.2);border-color:rgba(0,97,255,0.5);color:#7ab8ff}
-.dbx-nav-btn.error{background:rgba(255,59,48,0.2);border-color:rgba(255,59,48,0.5);color:#ff6b6b}
+.dbx-nav-btn{background:var(--pill-bg);border:1.5px solid var(--pill-border);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--text-secondary);font-size:11px;font-weight:600;transition:background 0.2s;white-space:nowrap}
+.dbx-nav-btn.connected{background:var(--connected-bg);border-color:var(--connected-border);color:var(--connected-text)}
+.dbx-nav-btn.error{background:var(--error-bg);border-color:var(--error-border);color:var(--error-text)}
 
-.search-icon-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s}
-.search-icon-btn.active{background:rgba(0,122,255,0.2);border-color:rgba(0,122,255,0.5)}
+.search-icon-btn{background:var(--pill-bg);border:1.5px solid var(--pill-border);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s}
+.search-icon-btn.active{background:var(--accent-dim);border-color:var(--accent-border)}
 .search-collapsible{max-height:0;overflow:hidden;opacity:0;transition:max-height 0.25s ease,opacity 0.18s ease;flex-shrink:0}
 .search-collapsible.open{max-height:70px;opacity:1}
 
 /* List title area */
 .list-hero{padding:8px 24px 12px;flex-shrink:0}
 .list-hero-icon{font-size:36px;margin-bottom:4px}
-.list-hero h1{font-size:30px;font-weight:700;letter-spacing:-0.5px}
-.list-hero .sub{font-size:13px;color:rgba(255,255,255,0.4);margin-top:2px}
+.list-hero h1{font-size:30px;font-weight:700;letter-spacing:-0.5px;color:var(--text-list-name);text-shadow:var(--title-shadow)}
+.list-hero .sub{font-size:13px;color:var(--text-secondary);margin-top:2px}
 
 /* Search */
 .search-wrap{padding:4px 16px 0;position:relative;flex-shrink:0}
 .search-wrap svg{position:absolute;left:28px;top:50%;transform:translateY(-50%);opacity:0.4;pointer-events:none}
-.search-wrap input{width:100%;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;padding:10px 36px;color:#fff;font-size:15px;outline:none;transition:border 0.2s}
-.search-wrap input.has-text{border-color:rgba(0,122,255,0.5)}
-.search-clear{position:absolute;right:28px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;color:#fff;font-size:11px;display:none;align-items:center;justify-content:center}
+.search-wrap input{width:100%;background:var(--pill-bg);border:1.5px solid var(--surface-border);border-radius:12px;padding:10px 36px;color:var(--text-primary);font-size:15px;outline:none;transition:border 0.2s;font-family:var(--font-body)}
+.search-wrap input.has-text{border-color:var(--accent-border)}
+.search-clear{position:absolute;right:28px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,0.2);border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;color:var(--text-primary);font-size:11px;display:none;align-items:center;justify-content:center}
 .search-clear.visible{display:flex}
 
 /* Add row */
 .add-row{padding:12px 16px 8px;display:flex;gap:10px;flex-shrink:0}
-.add-row input{flex:1;background:rgba(255,255,255,0.1);border:1.5px solid rgba(255,255,255,0.15);border-radius:12px;padding:12px 16px;color:#fff;font-size:15px;outline:none}
-.add-btn{background:linear-gradient(135deg,#007aff,#5856d6);border:none;border-radius:12px;width:46px;height:46px;cursor:pointer;color:#fff;font-size:24px;font-weight:300;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 16px rgba(0,122,255,0.4)}
+.add-row input{flex:1;background:var(--surface);border:1.5px solid var(--pill-border);border-radius:12px;padding:12px 16px;color:var(--text-primary);font-size:15px;outline:none;font-family:var(--font-body)}
+.add-btn{background:var(--accent-gradient);border:none;border-radius:12px;width:46px;height:46px;cursor:pointer;color:#fff;font-size:24px;font-weight:300;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 4px 16px var(--accent-shadow)}
 .add-btn:active{transform:scale(0.93)}
-.img-btn{background:rgba(255,255,255,0.12);border:1.5px solid rgba(255,255,255,0.18);border-radius:12px;width:46px;height:46px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.img-btn{background:var(--surface);border:1.5px solid var(--pill-border);border-radius:12px;width:46px;height:46px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .img-btn:active{transform:scale(0.93)}
 
 /* Scrollable list area */
@@ -216,23 +292,23 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 .row-wrap{margin-bottom:8px;position:relative;border-radius:14px;overflow:hidden}
 .item-del-bg{
   position:absolute;right:0;top:0;bottom:0;width:90px;
-  background:#ff3b30;display:flex;align-items:center;justify-content:center;
+  background:var(--delete);display:flex;align-items:center;justify-content:center;
   border-radius:0 14px 14px 0;opacity:0;
 }
 .item-del-bg span{color:#fff;font-size:13px;font-weight:700}
 .done-row{opacity:0.5;background:rgba(255,255,255,0.04)!important;}
 .done-row .task-edit-input{text-decoration:line-through}
-.section-label{font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,0.3);text-transform:uppercase;margin-top:20px;margin-bottom:10px;padding:0 2px;display:flex;align-items:center;gap:8px}
-.section-label::before,.section-label::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.08)}
-.empty{text-align:center;margin-top:60px;color:rgba(255,255,255,0.25);font-size:15px;line-height:1.6}
-.drop-line{height:3px;border-radius:2px;background:linear-gradient(90deg,#007aff,#5856d6);margin:2px 0;box-shadow:0 0 8px rgba(0,122,255,0.7);animation:pulseIn 0.12s ease}
+.section-label{font-size:11px;font-weight:700;letter-spacing:2px;color:var(--text-section);text-transform:uppercase;margin-top:20px;margin-bottom:10px;padding:0 2px;display:flex;align-items:center;gap:8px}
+.section-label::before,.section-label::after{content:'';flex:1;height:1px;background:var(--divider)}
+.empty{text-align:center;margin-top:60px;color:var(--text-tertiary);font-size:15px;line-height:1.6}
+.drop-line{height:3px;border-radius:2px;background:var(--drop-line);margin:2px 0;box-shadow:0 0 8px var(--accent-shadow);animation:pulseIn 0.12s ease}
 
 .row-wrap{margin-bottom:8px}
 
 /* Task row */
 .task-row{
   display:flex;align-items:center;
-  background:rgba(255,255,255,0.07);
+  background:var(--surface);
   border-radius:14px;
   padding:14px 12px;gap:12px;
   box-shadow:0 1px 4px rgba(0,0,0,0.18);
@@ -250,24 +326,24 @@ input::placeholder{color:rgba(255,255,255,0.3)}
 .task-row.is-image .check-btn{margin-top:2px}
 
 .task-content{flex:1;min-width:0}
-.task-text{font-size:16px;color:rgba(255,255,255,0.92);letter-spacing:-0.1px}
+.task-text{font-size:16px;color:var(--text-task);letter-spacing:-0.1px}
 .task-text.done{color:rgba(255,255,255,0.35);text-decoration:line-through}
 .task-edit-input{
   width:100%;background:transparent;border:none;outline:none;
-  font-size:16px;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
-  color:rgba(255,255,255,0.92);letter-spacing:-0.1px;
-  padding:0;caret-color:#007aff;
+  font-size:16px;font-family:var(--font-body);
+  color:var(--text-task);letter-spacing:-0.1px;
+  padding:0;caret-color:var(--accent);
 }
 .task-edit-input.done{color:rgba(255,255,255,0.35);text-decoration:line-through}
-.task-edit-input:focus{color:#fff}
+.task-edit-input:focus{color:var(--text-primary)}
 
 .task-img{width:100%;max-height:180px;object-fit:cover;border-radius:10px;display:block;cursor:pointer;transition:opacity 0.2s,filter 0.2s}
 .task-img.done{opacity:0.4;filter:grayscale(60%)}
 .img-wrapper{position:relative;margin-bottom:8px}
 .expand-hint{position:absolute;bottom:7px;right:7px;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border-radius:6px;padding:2px 7px;font-size:10px;color:rgba(255,255,255,0.85);pointer-events:none}
-.caption-input{width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.12);padding:4px 0;color:rgba(255,255,255,0.65);font-size:13px;outline:none;-webkit-user-select:text;user-select:text}
+.caption-input{width:100%;background:transparent;border:none;border-bottom:1px solid var(--surface-border);padding:4px 0;color:var(--text-caption);font-size:13px;outline:none;-webkit-user-select:text;user-select:text;font-family:var(--font-body)}
 .caption-input.done{color:rgba(255,255,255,0.3);text-decoration:line-through}
-mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
+mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;padding:0 1px}
 
 .drag-handle{cursor:grab;flex-shrink:0;line-height:0;padding:4px 2px 4px 4px;touch-action:none}
 .task-row.is-image .drag-handle{margin-top:2px}
@@ -285,9 +361,9 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 #lightbox .lb-close{position:absolute;top:20px;right:20px;background:rgba(255,255,255,0.15);backdrop-filter:blur(8px);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;cursor:pointer;border:none}
 
 /* ── Dropbox panel ── */
-#dbx-overlay{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.18s ease}
+#dbx-overlay{display:none;position:fixed;inset:0;z-index:500;background:var(--overlay);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.18s ease}
 #dbx-overlay.open{display:flex}
-#dbx-panel{width:100%;max-width:430px;background:linear-gradient(160deg,#1c2340,#1a2a4a);border-radius:24px 24px 0 0;padding:28px 24px;padding-bottom:max(32px,env(safe-area-inset-bottom));box-shadow:0 -8px 40px rgba(0,0,0,0.5);animation:slideUp 0.22s ease;overflow-y:auto;max-height:80vh}
+#dbx-panel{width:100%;max-width:430px;background:var(--panel-bg);border-radius:24px 24px 0 0;padding:28px 24px;padding-bottom:max(32px,env(safe-area-inset-bottom));box-shadow:0 -8px 40px rgba(0,0,0,0.5);animation:slideUp 0.22s ease;overflow-y:auto;max-height:80vh}
 .dbx-handle{width:40px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:0 auto 20px}
 .dbx-title{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:20px;font-weight:700}
 .dbx-notice{border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:13px}
@@ -302,19 +378,37 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 .dbx-step-text{color:rgba(255,255,255,0.7);font-size:13px;line-height:1.5;padding-top:2px}
 .dbx-step-text a{color:#7ab8ff}
 .dbx-desc{color:rgba(255,255,255,0.6);font-size:14px;margin-bottom:16px;line-height:1.6}
-.primary-btn{width:100%;padding:14px;background:linear-gradient(135deg,#007aff,#5856d6);border:none;border-radius:14px;cursor:pointer;color:#fff;font-size:16px;font-weight:600;box-shadow:0 4px 16px rgba(0,122,255,0.35);margin-bottom:10px}
+.primary-btn{width:100%;padding:14px;background:var(--accent-gradient);border:none;border-radius:14px;cursor:pointer;color:#fff;font-size:16px;font-weight:600;box-shadow:0 4px 16px var(--accent-shadow);margin-bottom:10px}
 .primary-btn:disabled{opacity:0.5}
 .connect-btn{width:100%;padding:14px;background:linear-gradient(135deg,#0061FF,#0D3DB5);border:none;border-radius:14px;cursor:pointer;color:#fff;font-size:16px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 4px 20px rgba(0,97,255,0.4)}
-.secondary-btn{width:100%;padding:14px;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.15);border-radius:14px;cursor:pointer;color:#fff;font-size:16px;font-weight:600;margin-bottom:16px}
+.secondary-btn{width:100%;padding:14px;background:var(--pill-bg);border:1.5px solid var(--pill-border);border-radius:14px;cursor:pointer;color:var(--text-primary);font-size:16px;font-weight:600;margin-bottom:16px}
 .secondary-btn:disabled{opacity:0.5}
 .disconnect-btn{background:none;border:none;cursor:pointer;color:rgba(255,80,80,0.6);font-size:14px;padding:0}
 .dbx-path-note{color:rgba(255,255,255,0.3);font-size:12px;margin-bottom:14px;line-height:1.5}
 .dbx-path-note code{color:rgba(255,255,255,0.5)}
 .green-dot{width:8px;height:8px;border-radius:50%;background:#34c759;flex-shrink:0}
-.more-btn{background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.12);border-radius:10px;padding:6px 10px;cursor:pointer;color:rgba(255,255,255,0.7);font-size:13px;letter-spacing:2px;line-height:1;transition:background 0.15s;display:flex;align-items:center}
+.more-btn{background:var(--pill-bg);border:1.5px solid var(--pill-border);border-radius:10px;padding:6px 10px;cursor:pointer;color:var(--text-primary);font-size:13px;letter-spacing:2px;line-height:1;transition:background 0.15s;display:flex;align-items:center}
 .more-btn:active{background:rgba(255,255,255,0.18)}
-.sort-lists-opt{width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:-apple-system,sans-serif}
-.sort-lists-opt.active{color:#007aff;font-weight:600}
+.sort-lists-opt{width:100%;padding:16px;background:none;border:none;border-bottom:1px solid var(--divider);cursor:pointer;color:var(--text-primary);font-size:17px;display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-body)}
+.sort-lists-opt.active{color:var(--accent);font-weight:600}
+.sort-lists-opt:last-child{border-bottom:none}
+/* ── Sheet utility classes ── */
+.sheet-panel{background:var(--surface-raised);border-radius:16px;overflow:hidden;margin-bottom:10px}
+.sheet-header{padding:14px 16px 10px;text-align:center;color:var(--text-secondary);font-size:13px;font-weight:600;border-bottom:1px solid var(--divider)}
+.sheet-row{width:100%;padding:16px;background:none;border:none;border-bottom:1px solid var(--divider);cursor:pointer;color:var(--text-primary);font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px;font-family:var(--font-body)}
+.sheet-row:last-child{border-bottom:none}
+.sheet-cancel{width:100%;padding:16px;background:var(--surface-raised);border:none;border-radius:16px;cursor:pointer;color:var(--text-primary);font-size:17px;font-weight:600;font-family:var(--font-body)}
+.sheet-action{color:var(--accent)}
+.sheet-delete{color:var(--delete)}
+/* ── Theme picker ── */
+.theme-picker-btn{background:var(--pill-bg);border:1.5px solid var(--pill-border);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s}
+.theme-picker-btn.active{background:var(--accent-dim);border-color:var(--accent-border)}
+.theme-row{width:100%;padding:16px;background:none;border:none;border-bottom:1px solid var(--divider);cursor:pointer;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:space-between;font-family:var(--font-body);color:var(--text-primary)}
+.theme-row:last-child{border-bottom:none}
+.theme-check{color:var(--accent);font-weight:700}
+/* ── Add-item inline inputs ── */
+.add-item-input{flex:1;min-width:0;background:var(--surface);border:1.5px solid var(--pill-border);border-radius:12px;padding:12px 16px;color:var(--text-primary);font-size:15px;outline:none;font-family:var(--font-body)}
+.add-item-btn{flex-shrink:0;width:44px;height:44px;border-radius:12px;border:none;cursor:pointer;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-weight:300}
 .sort-lists-opt:last-child{border-bottom:none}
 </style>
 </head>
@@ -328,10 +422,13 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
     <div>
       <h1 style="font-size:34px;font-weight:700;letter-spacing:-1px">Make a List</h1>
       <div style="margin-top:4px;display:flex;align-items:center;gap:10px">
-<button onclick="openSortListsSheet()" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.35);font-size:12px;padding:0;font-family:-apple-system,sans-serif;" id="sort-label">↕ Date Added</button>
+<button onclick="openSortListsSheet()" style="background:none;border:none;cursor:pointer;color:var(--text-tertiary);font-size:12px;padding:0;font-family:var(--font-body);" id="sort-label">↕ Date Added</button>
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <button class="theme-picker-btn" id="theme-picker-toggle" onclick="openThemePicker()" aria-label="Theme">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="white" stroke-width="1.4"/><circle cx="5.2" cy="6.2" r="1.3" fill="white"/><circle cx="10.8" cy="6.2" r="1.3" fill="white"/><circle cx="8" cy="10.8" r="1.3" fill="white"/></svg>
+      </button>
       <button class="search-icon-btn" id="lists-search-toggle-btn" onclick="toggleListsSearch()" aria-label="Search">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
       </button>
@@ -345,7 +442,7 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
   <div class="search-collapsible" id="lists-search-collapsible">
     <div style="margin:4px 20px 8px;position:relative">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);opacity:0.4;pointer-events:none"><circle cx="6.5" cy="6.5" r="5" stroke="white" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>
-      <input type="text" id="lists-search-input" placeholder="Search lists…" oninput="onListsSearch(this)" style="width:100%;box-sizing:border-box;padding:10px 36px;background:rgba(255,255,255,0.08);border:1.5px solid rgba(255,255,255,0.1);border-radius:12px;color:#fff;font-size:15px;outline:none;"/>
+      <input type="text" id="lists-search-input" placeholder="Search lists…" oninput="onListsSearch(this)" style="width:100%;box-sizing:border-box;padding:10px 36px;background:var(--pill-bg);border:1.5px solid var(--surface-border);border-radius:12px;color:var(--text-primary);font-size:15px;outline:none;font-family:var(--font-body)"/>
       <button class="search-clear" id="lists-search-clear" onclick="clearListsSearch()" style="position:absolute;right:10px;top:50%;transform:translateY(-50%)">✕</button>
     </div>
   </div>
@@ -368,29 +465,27 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 </div>
 
 <!-- Lists screen ••• menu -->
-<div id="lists-menu-overlay" onclick="closeListsMenu()" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);animation:fadeIn 0.15s ease">
+<div id="lists-menu-overlay" onclick="closeListsMenu()" style="display:none;position:fixed;inset:0;z-index:600;background:var(--overlay);backdrop-filter:blur(4px);animation:fadeIn 0.15s ease">
   <div id="lists-menu-sheet" onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
-    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
-      <div style="padding:14px 16px 10px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Options</div>
-      <button onclick="closeListsMenu();openSortListsSheet();" style="width:100%;padding:16px;background:none;border:none;cursor:pointer;color:#fff;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
-        ↕️ Sort Lists
-      </button>
+    <div class="sheet-panel">
+      <div class="sheet-header">Options</div>
+      <button onclick="closeListsMenu();openSortListsSheet();" class="sheet-row">↕️ Sort Lists</button>
     </div>
-    <button onclick="closeListsMenu()" style="width:100%;padding:16px;background:rgba(40,44,70,0.98);border:none;border-radius:16px;cursor:pointer;color:#fff;font-size:17px;font-weight:600">Cancel</button>
+    <button onclick="closeListsMenu()" class="sheet-cancel">Cancel</button>
   </div>
 </div>
 
 <!-- Sort Lists sheet -->
-<div id="sort-lists-overlay" onclick="closeSortListsSheet()" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
+<div id="sort-lists-overlay" onclick="closeSortListsSheet()" style="display:none;position:fixed;inset:0;z-index:600;background:var(--overlay);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
   <div onclick="event.stopPropagation()" style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
-    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
-      <div style="padding:14px 16px 10px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Sort Lists</div>
+    <div class="sheet-panel">
+      <div class="sheet-header">Sort Lists</div>
       <button onclick="setSortLists('dateAdded')" class="sort-lists-opt" id="sl-dateAdded">📅 Date Added</button>
       <button onclick="setSortLists('dateModified')" class="sort-lists-opt" id="sl-dateModified">🕐 Date Modified</button>
       <button onclick="setSortLists('nameAZ')" class="sort-lists-opt" id="sl-nameAZ">🔤 Name A → Z</button>
       <button onclick="setSortLists('nameZA')" class="sort-lists-opt" id="sl-nameZA">🔤 Name Z → A</button>
     </div>
-    <button onclick="closeSortListsSheet()" style="width:100%;padding:16px;background:rgba(40,44,70,0.98);border:none;border-radius:16px;cursor:pointer;color:#fff;font-size:17px;font-weight:600">Cancel</button>
+    <button onclick="closeSortListsSheet()" class="sheet-cancel">Cancel</button>
   </div>
 </div>
 
@@ -415,7 +510,7 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 <div class="screen hidden" id="detail-screen">
   <div class="navbar">
     <button class="back-btn" onclick="goBack()">
-      <svg width="10" height="16" viewBox="0 0 10 16" fill="none"><path d="M8 2L2 8L8 14" stroke="#007aff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <svg width="10" height="16" viewBox="0 0 10 16" fill="none"><path d="M8 2L2 8L8 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Lists
     </button>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
@@ -449,9 +544,9 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
   <div style="display:flex;align-items:center;gap:8px;padding:0 12px 0 16px;margin-bottom:8px">
     <input type="text" id="task-input" placeholder="Add a new item…"
       onkeydown="if(event.key==='Enter')addTextTask()"
-      style="flex:1;min-width:0;background:rgba(255,255,255,0.07);border:1.5px solid rgba(255,255,255,0.12);border-radius:12px;padding:12px 16px;color:#fff;font-size:15px;outline:none;"/>
-    <button onclick="addTextTask()" style="flex-shrink:0;width:44px;height:44px;border-radius:12px;border:none;cursor:pointer;background:#007aff;display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-weight:300;">+</button>
-    <button onclick="document.getElementById('file-input').click()" title="Add photo" style="flex-shrink:0;width:44px;height:44px;border-radius:12px;border:none;cursor:pointer;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:24px;">📷</button>
+      class="add-item-input"/>
+    <button onclick="addTextTask()" class="add-item-btn">+</button>
+    <button onclick="document.getElementById('file-input').click()" title="Add photo" style="flex-shrink:0;width:44px;height:44px;border-radius:12px;border:none;cursor:pointer;background:var(--pill-bg);border:1.5px solid var(--pill-border);display:flex;align-items:center;justify-content:center;font-size:24px;">📷</button>
     <input type="file" id="file-input" accept="image/*" style="display:none" onchange="addImageTask(this)"/>
   </div>
 
@@ -460,73 +555,69 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 </div>
 
 <!-- List action sheet -->
-<div id="list-menu-overlay" onclick="closeListMenu()" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);animation:fadeIn 0.15s ease">
+<div id="list-menu-overlay" onclick="closeListMenu()" style="display:none;position:fixed;inset:0;z-index:600;background:var(--overlay);backdrop-filter:blur(4px);animation:fadeIn 0.15s ease">
   <div id="list-menu-sheet" onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
-    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
-      <div id="list-menu-title" style="padding:14px 16px 10px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)"></div>
-      <button onclick="openRenameModal()" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
-        ✏️ Rename List
-      </button>
-      <button onclick="openSortSheet()" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
-        ↕️ Sort Items
-      </button>
-      <button id="clear-completed-btn" onclick="clearCompleted()" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
+    <div class="sheet-panel">
+      <div id="list-menu-title" class="sheet-header"></div>
+      <button onclick="openRenameModal()" class="sheet-row">✏️ Rename List</button>
+      <button onclick="openSortSheet()" class="sheet-row">↕️ Sort Items</button>
+      <button id="clear-completed-btn" onclick="clearCompleted()" class="sheet-row">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 12l2 2 4-4" stroke="#34c759" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="9" stroke="#34c759" stroke-width="2"/></svg>
         Clear Completed
       </button>
-      <button onclick="confirmDeleteList()" style="width:100%;padding:16px;background:none;border:none;cursor:pointer;color:#ff3b30;font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="#ff3b30" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <button onclick="confirmDeleteList()" class="sheet-row sheet-delete">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Delete List
       </button>
     </div>
-    <button onclick="closeListMenu()" style="width:100%;padding:16px;background:rgba(40,44,70,0.98);border:none;border-radius:16px;cursor:pointer;color:#fff;font-size:17px;font-weight:600">Cancel</button>
+    <button onclick="closeListMenu()" class="sheet-cancel">Cancel</button>
   </div>
 </div>
 
 <!-- Rename List modal -->
-<div id="rename-modal" onclick="closeRenameModal()" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
+<div id="rename-modal" onclick="closeRenameModal()" style="display:none;position:fixed;inset:0;z-index:700;background:var(--overlay);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
   <div onclick="event.stopPropagation()" style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
-    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
-      <div style="padding:16px;text-align:center;color:rgba(255,255,255,0.5);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Rename List</div>
+    <div class="sheet-panel">
+      <div class="sheet-header" style="padding:16px">Rename List</div>
       <div style="padding:16px">
         <input id="rename-input" type="text" placeholder="List name…"
-          style="width:100%;box-sizing:border-box;background:rgba(255,255,255,0.08);border:1.5px solid rgba(0,122,255,0.6);border-radius:12px;padding:12px 16px;color:#fff;font-size:16px;outline:none;"
+          style="width:100%;box-sizing:border-box;background:var(--pill-bg);border:1.5px solid var(--accent-border);border-radius:12px;padding:12px 16px;color:var(--text-primary);font-size:16px;outline:none;font-family:var(--font-body)"
           onkeydown="if(event.key==='Enter')doRenameList()"/>
       </div>
-      <div style="display:flex;border-top:1px solid rgba(255,255,255,0.08)">
-        <button onclick="closeRenameModal()" style="flex:1;padding:16px;background:none;border:none;border-right:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#007aff;font-size:17px">Cancel</button>
-        <button onclick="doRenameList()" style="flex:1;padding:16px;background:none;border:none;cursor:pointer;color:#007aff;font-size:17px;font-weight:700">Save</button>
+      <div style="display:flex;border-top:1px solid var(--divider)">
+        <button onclick="closeRenameModal()" style="flex:1;padding:16px;background:none;border:none;border-right:1px solid var(--divider);cursor:pointer;color:var(--accent);font-size:17px;font-family:var(--font-body)">Cancel</button>
+        <button onclick="doRenameList()" style="flex:1;padding:16px;background:none;border:none;cursor:pointer;color:var(--accent);font-size:17px;font-weight:700;font-family:var(--font-body)">Save</button>
       </div>
     </div>
   </div>
 </div>
 
 <!-- Sort sheet -->
-<div id="sort-overlay" onclick="closeSortSheet()" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
+<div id="sort-overlay" onclick="closeSortSheet()" style="display:none;position:fixed;inset:0;z-index:700;background:var(--overlay);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
   <div onclick="event.stopPropagation()" style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
-    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px">
-      <div style="padding:14px 16px 10px;text-align:center;color:rgba(255,255,255,0.4);font-size:13px;font-weight:600;border-bottom:1px solid rgba(255,255,255,0.08)">Sort Items</div>
-      <button onclick="sortItems('manual')" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">↕️ Manual Order (Default)</button>
-      <button onclick="sortItems('az')" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">🔤 A → Z</button>
-      <button onclick="sortItems('za')" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">🔤 Z → A</button>
-      <button onclick="sortItems('incomplete')" style="width:100%;padding:16px;background:none;border:none;border-bottom:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">⭕ Incomplete First</button>
-      <button onclick="sortItems('completed')" style="width:100%;padding:16px;background:none;border:none;cursor:pointer;color:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px">✅ Completed First</button>
+    <div class="sheet-panel">
+      <div class="sheet-header">Sort Items</div>
+      <button onclick="sortItems('manual')" class="sheet-row">↕️ Manual Order (Default)</button>
+      <button onclick="sortItems('az')" class="sheet-row">🔤 A → Z</button>
+      <button onclick="sortItems('za')" class="sheet-row">🔤 Z → A</button>
+      <button onclick="sortItems('incomplete')" class="sheet-row">⭕ Incomplete First</button>
+      <button onclick="sortItems('completed')" class="sheet-row">✅ Completed First</button>
     </div>
-    <button onclick="closeSortSheet()" style="width:100%;padding:16px;background:rgba(40,44,70,0.98);border:none;border-radius:16px;cursor:pointer;color:#fff;font-size:17px;font-weight:600">Cancel</button>
+    <button onclick="closeSortSheet()" class="sheet-cancel">Cancel</button>
   </div>
 </div>
 
 <!-- Delete confirmation sheet -->
-<div id="confirm-delete-overlay" style="display:none;position:fixed;inset:0;z-index:700;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
+<div id="confirm-delete-overlay" style="display:none;position:fixed;inset:0;z-index:700;background:var(--overlay);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
   <div style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
-    <div style="background:rgba(40,44,70,0.98);border-radius:16px;overflow:hidden;margin-bottom:10px;text-align:center">
-      <div style="padding:20px 16px 4px;color:#fff;font-size:17px;font-weight:700">Delete List?</div>
-      <div style="padding:4px 16px 20px;color:rgba(255,255,255,0.5);font-size:14px">
+    <div class="sheet-panel" style="text-align:center">
+      <div style="padding:20px 16px 4px;color:var(--text-primary);font-size:17px;font-weight:700">Delete List?</div>
+      <div style="padding:4px 16px 20px;color:var(--text-secondary);font-size:14px">
         "<span id="confirm-list-name"></span>" will be permanently deleted. This cannot be undone.
       </div>
-      <div style="border-top:1px solid rgba(255,255,255,0.08);display:flex">
-        <button onclick="document.getElementById('confirm-delete-overlay').style.display='none'" style="flex:1;padding:16px;background:none;border:none;border-right:1px solid rgba(255,255,255,0.08);cursor:pointer;color:#007aff;font-size:17px;font-weight:400">Cancel</button>
-        <button onclick="doDeleteList()" style="flex:1;padding:16px;background:none;border:none;cursor:pointer;color:#ff3b30;font-size:17px;font-weight:700">Delete</button>
+      <div style="border-top:1px solid var(--divider);display:flex">
+        <button onclick="document.getElementById('confirm-delete-overlay').style.display='none'" style="flex:1;padding:16px;background:none;border:none;border-right:1px solid var(--divider);cursor:pointer;color:var(--accent);font-size:17px;font-weight:400;font-family:var(--font-body)">Cancel</button>
+        <button onclick="doDeleteList()" style="flex:1;padding:16px;background:none;border:none;cursor:pointer;color:var(--delete);font-size:17px;font-weight:700;font-family:var(--font-body)">Delete</button>
       </div>
     </div>
   </div>
@@ -536,6 +627,24 @@ mark{background:rgba(0,122,255,0.45);color:#fff;border-radius:3px;padding:0 1px}
 <div id="lightbox" onclick="closeLightbox(event)">
   <img id="lightbox-img" src="" alt=""/>
   <button class="lb-close" onclick="closeLightbox()">✕</button>
+</div>
+
+<!-- Theme picker sheet -->
+<div id="theme-overlay" onclick="closeThemePicker()" style="display:none;position:fixed;inset:0;z-index:600;background:var(--overlay);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center;animation:fadeIn 0.15s ease">
+  <div onclick="event.stopPropagation()" style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
+    <div class="sheet-panel">
+      <div class="sheet-header">Theme</div>
+      <button onclick="applyTheme('classic')" class="theme-row" id="theme-row-classic">
+        <span>☀ Classic</span>
+        <span class="theme-check" id="theme-check-classic">✓</span>
+      </button>
+      <button onclick="applyTheme('retro')" class="theme-row" id="theme-row-retro">
+        <span>👾 Retro Arcade</span>
+        <span class="theme-check" id="theme-check-retro" style="display:none">✓</span>
+      </button>
+    </div>
+    <button onclick="closeThemePicker()" class="sheet-cancel">Done</button>
+  </div>
 </div>
 
 <!-- Dropbox panel -->
@@ -916,7 +1025,7 @@ const sl = document.getElementById('sort-label');
         <span>Delete</span>
       </div>
       <div class="list-card" id="lc-${l.id}" onclick="lcTap(event,${l.id})">
-        <div class="list-card-icon" style="background:rgba(255,255,255,0.08)">${esc(l.icon)}</div>
+        <div class="list-card-icon" style="background:var(--pill-bg)">${esc(l.icon)}</div>
         <div class="list-card-info">
           <div class="list-card-name">${esc(l.name)}</div>
           <div class="list-card-count">${countStr}${dateStr ? ' · ' + dateStr : ''}</div>
@@ -1950,19 +2059,59 @@ function renderDbxPanel(){
     dHtml=`<div class="dbx-notice success"><div class="green-dot"></div><span>Connected to Dropbox</span></div>
     ${dMsg}
     <button class="primary-btn" onclick="handleBackup()" ${dBusy?'disabled':''}>${dbxStatus==='saving'?'Saving…':'☁️  Save to Dropbox'}</button>
-    <div style="text-align:center;font-size:12px;color:rgba(255,255,255,0.35);margin-top:-4px;margin-bottom:16px">Auto-saves 3 seconds after every change</div>
+    <div style="text-align:center;font-size:12px;color:var(--text-tertiary);margin-top:-4px;margin-bottom:16px">Auto-saves 3 seconds after every change</div>
     <button class="secondary-btn" onclick="handleRestore()" ${dBusy?'disabled':''}>${dbxStatus==='restoring'?'Restoring…':'⬇️  Restore from Dropbox'}</button>
     <button class="disconnect-btn" onclick="handleDisconnect()">Disconnect Dropbox</button>`;
   }
 
   body.innerHTML=`
-    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-bottom:10px">Google Drive</div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-section);text-transform:uppercase;margin-bottom:10px">Google Drive</div>
     ${gHtml}
-    <div style="height:1px;background:rgba(255,255,255,0.08);margin:20px 0"></div>
-    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:rgba(255,255,255,0.35);text-transform:uppercase;margin-bottom:10px">Dropbox</div>
+    <div style="height:1px;background:var(--divider);margin:20px 0"></div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--text-section);text-transform:uppercase;margin-bottom:10px">Dropbox</div>
     ${dHtml}
   `;
   updateDbxButtons();
+}
+
+// ══════════════════════════════════════════
+//  THEME
+// ══════════════════════════════════════════
+const THEMES = ['classic', 'retro'];
+let currentTheme = localStorage.getItem('app_theme') || 'classic';
+
+function applyTheme(id) {
+  if (!THEMES.includes(id)) id = 'classic';
+  currentTheme = id;
+  localStorage.setItem('app_theme', id);
+  if (id === 'classic') {
+    delete document.documentElement.dataset.theme;
+  } else {
+    document.documentElement.dataset.theme = id;
+  }
+  updateThemeChecks();
+}
+
+function updateThemeChecks() {
+  THEMES.forEach(t => {
+    const chk = document.getElementById('theme-check-' + t);
+    if (chk) chk.style.display = currentTheme === t ? '' : 'none';
+  });
+}
+
+function openThemePicker() {
+  updateThemeChecks();
+  const overlay = document.getElementById('theme-overlay');
+  overlay.style.display = 'flex';
+  const btn = document.getElementById('theme-picker-toggle');
+  if (btn) btn.classList.add('active');
+}
+
+function closeThemePicker() {
+  const overlay = document.getElementById('theme-overlay');
+  overlay.style.display = 'none';
+  const btn = document.getElementById('theme-picker-toggle');
+  if (btn) btn.classList.remove('active');
 }
 
 // ══════════════════════════════════════════
@@ -1978,6 +2127,7 @@ function renderDbxPanel(){
 // ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
+applyTheme(currentTheme);
 load();
 showListsScreen();
 updateDbxButtons();
