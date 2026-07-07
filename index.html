@@ -82,6 +82,9 @@
   --error-bg:rgba(255,59,48,0.2);
   --error-border:rgba(255,59,48,0.5);
   --error-text:#ff6b6b;
+  --warn-bg:rgba(255,184,77,0.16);
+  --warn-border:rgba(255,184,77,0.5);
+  --warn-text:#ffb84d;
   --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
 }
 [data-theme="retro"]{
@@ -119,6 +122,9 @@
   --error-bg:rgba(255,46,151,0.15);
   --error-border:rgba(255,46,151,0.5);
   --error-text:#FF2E97;
+  --warn-bg:rgba(255,230,0,0.15);
+  --warn-border:rgba(255,230,0,0.5);
+  --warn-text:#FFE600;
   --font-body:'Courier New',Courier,monospace;
 }
 [data-theme="notepad"]{
@@ -156,6 +162,9 @@
   --error-bg:rgba(255,59,48,0.08);
   --error-border:rgba(255,59,48,0.3);
   --error-text:#c0392b;
+  --warn-bg:rgba(199,127,0,0.1);
+  --warn-border:rgba(199,127,0,0.35);
+  --warn-text:#a86400;
   --font-body:-apple-system,'Helvetica Neue',sans-serif;
 }
 /* ── Notepad: override hardcoded dark-only colors ── */
@@ -316,6 +325,8 @@ input::placeholder{color:var(--text-tertiary)}
 .dbx-nav-btn{background:var(--pill-bg);border:1.5px solid var(--pill-border);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:5px;color:var(--text-secondary);font-size:11px;font-weight:600;transition:background 0.2s;white-space:nowrap}
 .dbx-nav-btn.connected{background:var(--connected-bg);border-color:var(--connected-border);color:var(--connected-text)}
 .dbx-nav-btn.error{background:var(--error-bg);border-color:var(--error-border);color:var(--error-text)}
+.dbx-nav-btn.warn{background:var(--warn-bg);border-color:var(--warn-border);color:var(--warn-text)}
+.dbx-nav-btn.warn.error{background:var(--error-bg);border-color:var(--error-border);color:var(--error-text)}
 
 .search-icon-btn{background:var(--pill-bg);border:1.5px solid var(--pill-border);border-radius:10px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s}
 .search-icon-btn.active{background:var(--accent-dim);border-color:var(--accent-border)}
@@ -773,6 +784,9 @@ let dbxRefreshPromise = null;
 let dbxStatus = null;
 let dbxMessage = '';
 let backupError = null; // null = OK, string = last error message
+// Soft state: Google Drive silent-refresh failed (Safari ITP blocks the iframe cookie).
+// Not a hard error — Dropbox may still be saving fine. Cleared on successful refresh/connect.
+let gdriveNeedsReconnect = false;
 
 // ── Default lists so the app isn't empty on first launch
 const DEFAULT_LISTS = [];
@@ -862,9 +876,13 @@ function updateBackupButtonLabel() {
   const homeLbl = document.getElementById('dbx-home-label');
   const btn = document.getElementById('dbx-open-btn');
   const homeBtn = document.getElementById('dbx-open-btn-home');
-  let text, isError = !!backupError;
+  const isError = !!backupError;
+  const isWarn = !isError && gdriveNeedsReconnect;
+  let text;
   if (backupError) {
     text = /reconnect/i.test(backupError) ? '⚠︎ Reconnect' : '⚠︎ Sync failed';
+  } else if (gdriveNeedsReconnect) {
+    text = '☁︎ Reconnect Drive';
   } else {
     const connected = dbxToken || gdriveToken;
     text = '☁️ Backup';
@@ -882,8 +900,8 @@ function updateBackupButtonLabel() {
   }
   if (lbl) lbl.textContent = text;
   if (homeLbl) homeLbl.textContent = text;
-  if (btn) btn.classList.toggle('error', isError);
-  if (homeBtn) homeBtn.classList.toggle('error', isError);
+  if (btn) { btn.classList.toggle('error', isError); btn.classList.toggle('warn', isWarn); }
+  if (homeBtn) { homeBtn.classList.toggle('error', isError); homeBtn.classList.toggle('warn', isWarn); }
 }
 
 let autoBackupTimer = null;
@@ -897,7 +915,15 @@ function _isTransientNetworkError(e) {
   return /Load failed|NetworkError|Failed to fetch|network connection was lost|Internet connection appears to be offline|timed out|The request timed out/i.test(m);
 }
 
+// Silent Drive refresh failure — Safari ITP blocks the iframe cookie so the
+// token can't be renewed without a user gesture. Soft-fail so Dropbox still
+// counts as a success and the pill shows "Reconnect" instead of red-alerting.
+function _isGDriveReconnectError(e) {
+  return !!e && /session expired|please reconnect/i.test(e.message || '');
+}
+
 async function _attemptAutoBackup() {
+  let anySaved = false;
   if (dbxToken) {
     await _ensureDropboxToken();
     await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
@@ -905,16 +931,29 @@ async function _attemptAutoBackup() {
       const fname = `/Lists/${safeFilename(list.name)}.txt`;
       await dbxUpload(fname, listToText(list), true);
     }
+    anySaved = true;
   }
   if (gdriveToken) {
-    await _ensureGDriveToken();
-    await _withGDriveAuth(async () => {
-      await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
-      for (const list of lists) {
-        await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
+    try {
+      await _ensureGDriveToken();
+      await _withGDriveAuth(async () => {
+        await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+        for (const list of lists) {
+          await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
+        }
+      });
+      gdriveNeedsReconnect = false;
+      anySaved = true;
+    } catch(e) {
+      if (_isGDriveReconnectError(e)) {
+        gdriveNeedsReconnect = true;
+        console.warn('[auto-backup] Drive needs reconnect (soft) — Dropbox still handling backups if connected');
+      } else {
+        throw e;
       }
-    });
+    }
   }
+  return { anySaved };
 }
 
 async function _runAutoBackup() {
@@ -925,9 +964,11 @@ async function _runAutoBackup() {
   autoBackupInFlight = true;
   const MAX_ATTEMPTS = 3;
   let lastErr = null;
+  let anySaved = false;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      await _attemptAutoBackup();
+      const result = await _attemptAutoBackup();
+      anySaved = result.anySaved;
       lastErr = null;
       break;
     } catch(e) {
@@ -945,9 +986,16 @@ async function _runAutoBackup() {
     console.error('[auto-backup] giving up:', lastErr);
     backupError = lastErr.message || 'Backup failed';
     updateBackupButtonLabel();
-  } else {
+  } else if (anySaved) {
+    // At least one target saved (Dropbox and/or Drive). If Drive soft-failed,
+    // the pill picks that up via gdriveNeedsReconnect in updateBackupButtonLabel.
     backupError = null;
     updateBackupTimestamp();
+  } else {
+    // Only case: Drive was the sole target and it needs reconnect. No hard error,
+    // no timestamp update — pill goes to the soft "Reconnect Drive" state.
+    backupError = null;
+    updateBackupButtonLabel();
   }
   autoBackupInFlight = false;
   if (autoBackupRerunPending) {
@@ -1105,6 +1153,7 @@ function openDbxPanel(){
   } else if (pillLooksFailed) {
     alert('Sync failed but no error detail was captured.\n\nbackupError = null, but pill is still in error state.\nPill label: "' + lblText + '"\n\n(A code path cleared backupError without refreshing the pill, or the pill DOM is stuck.)');
   }
+  // Soft Drive-reconnect state: no alert. The panel shows a reconnect banner + button.
   document.getElementById('dbx-overlay').classList.add('open');
   renderDbxPanel();
 }
@@ -1820,6 +1869,7 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementB
       gdriveTokenExpiry = Date.now() + expiresIn * 1000;
       localStorage.setItem('gdrive_token', t);
       localStorage.setItem('gdrive_token_expiry', String(gdriveTokenExpiry));
+      gdriveNeedsReconnect = false;
       window.history.replaceState(null, '', window.location.pathname);
     }
   }
@@ -1861,6 +1911,7 @@ function _initGDriveTokenClient() {
       gdriveTokenExpiry = Date.now() + (parseInt(response.expires_in) || 3599) * 1000;
       localStorage.setItem('gdrive_token', gdriveToken);
       localStorage.setItem('gdrive_token_expiry', String(gdriveTokenExpiry));
+      gdriveNeedsReconnect = false;
       if (resolve) resolve(gdriveToken);
       renderDbxPanel();
       updateDbxButtons();
@@ -1869,7 +1920,7 @@ function _initGDriveTokenClient() {
   return true;
 }
 
-async function _doGDriveRefresh() {
+async function _doGDriveRefresh({ interactive = false } = {}) {
   if (gdriveRefreshPromise) return gdriveRefreshPromise;
   let timeoutId = null;
   gdriveRefreshPromise = new Promise((resolve, reject) => {
@@ -1879,14 +1930,20 @@ async function _doGDriveRefresh() {
     }
     gdrivePendingResolve = resolve;
     gdrivePendingReject  = reject;
-    // Safari/GIS silent refresh can hang indefinitely (blocked cookies, ITP).
-    // Bail out after 10s so callers see an error instead of a stuck promise.
-    timeoutId = setTimeout(() => {
-      const r = gdrivePendingReject;
-      gdrivePendingResolve = null;
-      gdrivePendingReject  = null;
-      if (r) r(new Error('Google Drive session expired. Please reconnect.'));
-    }, 10000);
+    if (!interactive) {
+      // Background auto-backup path: Safari/GIS silent refresh can hang
+      // indefinitely (blocked cookies, ITP). Bail out after 10s so the
+      // caller can soft-fail to "Reconnect Drive" instead of stalling.
+      timeoutId = setTimeout(() => {
+        const r = gdrivePendingReject;
+        gdrivePendingResolve = null;
+        gdrivePendingReject  = null;
+        if (r) r(new Error('Google Drive session expired. Please reconnect.'));
+      }, 10000);
+    }
+    // Under a user gesture, `prompt: ''` lets GIS silently succeed OR fall
+    // back to a popup for consent — both fine. Off-gesture the popup path
+    // gets blocked and we still see `response.error` in the callback.
     gdriveTokenClient.requestAccessToken({ prompt: '' });
   }).finally(() => {
     if (timeoutId) clearTimeout(timeoutId);
@@ -1918,6 +1975,28 @@ async function _withGDriveAuth(fn) {
 function startGDriveOAuth() {
   const redirect = encodeURIComponent(_appBaseUrl());
   window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GDRIVE_CLIENT_ID}&redirect_uri=${redirect}&response_type=token&scope=${encodeURIComponent(GDRIVE_SCOPE)}&state=gdrive`;
+}
+
+// User-gesture-triggered reconnect. Called from the "Reconnect Google Drive"
+// button in the panel and the pill's soft-warn state — both are real taps, so
+// GIS is allowed to open a popup (which the background auto-backup timer isn't).
+// Falls back to the full redirect flow if silent + popup both fail.
+async function handleGDriveReconnect() {
+  gdriveStatus = 'reconnecting';
+  gdriveMessage = '';
+  renderDbxPanel();
+  try {
+    await _doGDriveRefresh({ interactive: true });
+    gdriveNeedsReconnect = false;
+    backupError = null;
+    gdriveStatus = null;
+    updateBackupButtonLabel();
+    renderDbxPanel();
+    scheduleAutoBackup();
+  } catch(e) {
+    // Silent refresh failed even under user gesture — do full OAuth redirect.
+    startGDriveOAuth();
+  }
 }
 
 async function gdriveGetOrCreateFolder(token) {
@@ -2050,7 +2129,9 @@ function handleGDriveDisconnect() {
   gdriveToken = null; gdriveTokenExpiry = 0;
   gdriveStatus = null; gdriveMessage = '';
   gdrivePendingResolve = null; gdrivePendingReject = null; gdriveRefreshPromise = null;
-  if (!dbxToken) { backupError = null; updateBackupButtonLabel(); }
+  gdriveNeedsReconnect = false;
+  if (!dbxToken) { backupError = null; }
+  updateBackupButtonLabel();
   renderDbxPanel();
 }
 function startDropboxOAuth() {
@@ -2191,12 +2272,23 @@ function renderDbxPanel(){
 
   // ── Google Drive section ──
   let gHtml='';
-  const gBusy = gdriveStatus==='saving'||gdriveStatus==='restoring';
+  const gBusy = gdriveStatus==='saving'||gdriveStatus==='restoring'||gdriveStatus==='reconnecting';
   if(!gdriveToken){
     gHtml=`<button class="connect-btn" style="background:linear-gradient(135deg,#4285f4,#34a853);margin-bottom:0" onclick="startGDriveOAuth()">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="white"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="white"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="white"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="white"/></svg>
       Connect Google Drive
     </button>`;
+  } else if (gdriveNeedsReconnect) {
+    // Soft state: session expired, silent refresh blocked (typically Safari ITP).
+    // Reconnect must be user-gesture-triggered so GIS can open a popup.
+    const gMsg = gdriveMessage?`<div class="dbx-notice ${gdriveStatus==='error'?'error':'info'}">${esc(gdriveMessage)}</div>`:'';
+    gHtml=`<div class="dbx-notice warning">
+      <div class="ntitle">Google Drive session expired</div>
+      <div class="nbody">Safari blocks silent re-auth after long idle. Tap Reconnect to refresh — takes a moment, no password needed if still signed into Google.</div>
+    </div>
+    ${gMsg}
+    <button class="primary-btn" style="background:linear-gradient(135deg,#4285f4,#34a853)" onclick="handleGDriveReconnect()" ${gBusy?'disabled':''}>${gdriveStatus==='reconnecting'?'Reconnecting…':'🔄  Reconnect Google Drive'}</button>
+    <button class="disconnect-btn" onclick="handleGDriveDisconnect()">Disconnect Google Drive</button>`;
   } else {
     const gMsg = gdriveMessage?`<div class="dbx-notice ${gdriveStatus==='error'?'error':'info'}">${esc(gdriveMessage)}</div>`:'';
     gHtml=`<div class="dbx-notice success"><div class="green-dot"></div><span>Connected to Google Drive</span></div>
