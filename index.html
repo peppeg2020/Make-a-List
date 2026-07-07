@@ -910,6 +910,7 @@ async function _runAutoBackup() {
     backupError = null;
     updateBackupTimestamp();
   } catch(e) {
+    console.error('[auto-backup]', e);
     backupError = e.message || 'Backup failed';
     updateBackupButtonLabel();
   }
@@ -1054,7 +1055,11 @@ function clearListsSearch(){
   renderListsScreen();
 }
 
-function openDbxPanel(){document.getElementById('dbx-overlay').classList.add('open');renderDbxPanel();}
+function openDbxPanel(){
+  if (backupError) alert('Auto-backup error:\n\n' + backupError);
+  document.getElementById('dbx-overlay').classList.add('open');
+  renderDbxPanel();
+}
 
 let listsSort = 'dateAdded'; // dateAdded | dateModified | nameAZ | nameZA
 
