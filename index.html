@@ -1056,7 +1056,15 @@ function clearListsSearch(){
 }
 
 function openDbxPanel(){
-  if (backupError) alert('Auto-backup error:\n\n' + backupError);
+  const btn = document.getElementById('dbx-open-btn');
+  const homeBtn = document.getElementById('dbx-open-btn-home');
+  const pillLooksFailed = (btn && btn.classList.contains('error')) || (homeBtn && homeBtn.classList.contains('error'));
+  const lblText = (document.getElementById('dbx-btn-label')||{}).textContent || (document.getElementById('dbx-home-label')||{}).textContent || '';
+  if (backupError) {
+    alert('Auto-backup error:\n\n' + backupError);
+  } else if (pillLooksFailed) {
+    alert('Sync failed but no error detail was captured.\n\nbackupError = null, but pill is still in error state.\nPill label: "' + lblText + '"\n\n(A code path cleared backupError without refreshing the pill, or the pill DOM is stuck.)');
+  }
   document.getElementById('dbx-overlay').classList.add('open');
   renderDbxPanel();
 }
