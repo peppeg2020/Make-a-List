@@ -887,32 +887,72 @@ function updateBackupButtonLabel() {
 }
 
 let autoBackupTimer = null;
+let autoBackupInFlight = false;
+let autoBackupRerunPending = false;
+
+// Errors from a fetch that was interrupted mid-flight (iOS tab suspension,
+// network flap, etc). These are worth retrying — a fresh request usually succeeds.
+function _isTransientNetworkError(e) {
+  const m = (e && e.message) || '';
+  return /Load failed|NetworkError|Failed to fetch|network connection was lost|Internet connection appears to be offline|timed out|The request timed out/i.test(m);
+}
+
+async function _attemptAutoBackup() {
+  if (dbxToken) {
+    await _ensureDropboxToken();
+    await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
+    for (const list of lists) {
+      const fname = `/Lists/${safeFilename(list.name)}.txt`;
+      await dbxUpload(fname, listToText(list), true);
+    }
+  }
+  if (gdriveToken) {
+    await _ensureGDriveToken();
+    await _withGDriveAuth(async () => {
+      await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+      for (const list of lists) {
+        await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
+      }
+    });
+  }
+}
 
 async function _runAutoBackup() {
-  try {
-    if (dbxToken) {
-      await _ensureDropboxToken();
-      await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
-      for (const list of lists) {
-        const fname = `/Lists/${safeFilename(list.name)}.txt`;
-        await dbxUpload(fname, listToText(list), true);
+  // Prevent overlapping runs — the visibility-flush and the debounced timer
+  // can both fire close together. If a run comes in while one is going, mark
+  // it pending and re-run once at the end so we don't skip the latest state.
+  if (autoBackupInFlight) { autoBackupRerunPending = true; return; }
+  autoBackupInFlight = true;
+  const MAX_ATTEMPTS = 3;
+  let lastErr = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      await _attemptAutoBackup();
+      lastErr = null;
+      break;
+    } catch(e) {
+      lastErr = e;
+      const transient = _isTransientNetworkError(e);
+      console.warn(`[auto-backup] attempt ${attempt}/${MAX_ATTEMPTS} failed${transient ? ' (transient)' : ''}:`, e.message);
+      if (attempt < MAX_ATTEMPTS && transient) {
+        await new Promise(r => setTimeout(r, 1500 * attempt));
+        continue;
       }
+      break;
     }
-    if (gdriveToken) {
-      await _ensureGDriveToken();
-      await _withGDriveAuth(async () => {
-        await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
-        for (const list of lists) {
-          await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
-        }
-      });
-    }
+  }
+  if (lastErr) {
+    console.error('[auto-backup] giving up:', lastErr);
+    backupError = lastErr.message || 'Backup failed';
+    updateBackupButtonLabel();
+  } else {
     backupError = null;
     updateBackupTimestamp();
-  } catch(e) {
-    console.error('[auto-backup]', e);
-    backupError = e.message || 'Backup failed';
-    updateBackupButtonLabel();
+  }
+  autoBackupInFlight = false;
+  if (autoBackupRerunPending) {
+    autoBackupRerunPending = false;
+    _runAutoBackup();
   }
 }
 
