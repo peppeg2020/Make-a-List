@@ -804,7 +804,7 @@ async function dbxUpload(path, content, isText) {
       'Dropbox-API-Arg': JSON.stringify({path, mode:'overwrite', autorename:false, mute:true}),
       'Content-Type': 'application/octet-stream',
     },
-    body: isText ? content : JSON.stringify(content),
+    body: (content instanceof Blob) ? content : (isText ? content : JSON.stringify(content)),
   });
   let res = await doFetch();
   if (res.status === 401 && dbxRefreshToken) {
@@ -860,6 +860,67 @@ function listToText(list) {
 // Safe filename from list name
 function safeFilename(name) {
   return name.replace(/[^a-zA-Z0-9 _-]/g,'').trim().replace(/\s+/g,' ') || 'list';
+}
+
+// PNG filename for an image item: "<List> - <caption>.png", or "<List> - image-<id>.png" if empty.
+// Bypasses safeFilename's 'list' fallback so a blank caption falls through to the id-based name.
+function imageItemFilename(list, item) {
+  const raw = (item.text || '').trim();
+  let suffix = '';
+  if (raw) suffix = raw.replace(/[^a-zA-Z0-9 _-]/g,'').trim().replace(/\s+/g,' ');
+  if (!suffix) suffix = `image-${item.id}`;
+  return `${safeFilename(list.name)} - ${suffix}.png`;
+}
+
+// Render an image item to a PNG blob. If caption text exists, appends a dark
+// caption bar under the image with word-wrapped white text; min 60px, grows
+// with wrapped lines. No caption -> image alone at native resolution.
+async function renderItemImageBlob(item) {
+  const img = new Image();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = () => reject(new Error('image decode failed for item ' + item.id));
+    img.src = item.image;
+  });
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const caption = (item.text || '').trim();
+  const font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
+  const padH = 16, padV = 12, lineH = 20;
+
+  let lines = [], barH = 0;
+  if (caption) {
+    const m = document.createElement('canvas').getContext('2d');
+    m.font = font;
+    const maxW = w - 2 * padH;
+    const words = caption.split(/\s+/);
+    let cur = '';
+    for (const word of words) {
+      const test = cur ? cur + ' ' + word : word;
+      if (m.measureText(test).width <= maxW) cur = test;
+      else { if (cur) lines.push(cur); cur = word; }
+    }
+    if (cur) lines.push(cur);
+    if (!lines.length) lines = [caption];
+    barH = Math.max(60, 2 * padV + lines.length * lineH);
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h + barH;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0);
+  if (caption) {
+    ctx.fillStyle = '#1c1c1e';
+    ctx.fillRect(0, h, w, barH);
+    ctx.fillStyle = '#ffffff';
+    ctx.textBaseline = 'top';
+    ctx.font = font;
+    const startY = h + (barH - lines.length * lineH) / 2;
+    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], padH, startY + i * lineH);
+  }
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob returned null')), 'image/png');
+  });
 }
 
 // Auto-backup timer
@@ -932,6 +993,11 @@ async function _attemptAutoBackup() {
     for (const list of lists) {
       const fname = `/Lists/${safeFilename(list.name)}.txt`;
       await dbxUpload(fname, listToText(list), true);
+      for (const item of list.items) {
+        if (!item.image) continue;
+        const blob = await renderItemImageBlob(item);
+        await dbxUpload(`/Lists/${imageItemFilename(list, item)}`, blob);
+      }
     }
     anySaved = true;
   }
@@ -942,6 +1008,11 @@ async function _attemptAutoBackup() {
         await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
         for (const list of lists) {
           await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
+          for (const item of list.items) {
+            if (!item.image) continue;
+            const blob = await renderItemImageBlob(item);
+            await gdriveUploadBlob(gdriveToken, imageItemFilename(list, item), blob, 'image/png');
+          }
         }
       });
       gdriveNeedsReconnect = false;
@@ -2103,12 +2174,39 @@ async function gdriveUploadText(token, filename, text) {
   return res;
 }
 
+async function gdriveUploadBlob(token, filename, blob, mimeType) {
+  const { folderId } = await gdriveGetFileId(token);
+  const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${filename}' and '${folderId}' in parents and trashed=false&fields=files(id)`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  const searchData = await searchRes.json();
+  const existingId = searchData.files && searchData.files.length > 0 ? searchData.files[0].id : null;
+  const metadata = existingId ? { name: filename } : { name: filename, parents: [folderId] };
+  const body = new FormData();
+  body.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  body.append('file', new Blob([blob], { type: mimeType }));
+  const url = existingId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart`
+    : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+  const res = await fetch(url, { method: existingId ? 'PATCH' : 'POST', headers: { 'Authorization': `Bearer ${token}` }, body });
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`Google Drive upload failed for ${filename} (${res.status}): ${errBody || res.statusText}`);
+  }
+  return res;
+}
+
 async function handleGDriveSave() {
   gdriveStatus = 'saving'; gdriveMessage = 'Saving to Google Drive…'; renderDbxPanel();
   const doSave = async () => {
     await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
     for (const list of lists) {
       await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
+      for (const item of list.items) {
+        if (!item.image) continue;
+        const blob = await renderItemImageBlob(item);
+        await gdriveUploadBlob(gdriveToken, imageItemFilename(list, item), blob, 'image/png');
+      }
     }
   };
   try {
@@ -2227,6 +2325,11 @@ async function handleBackup(){
     for(const list of lists){
       const fname=`/Lists/${safeFilename(list.name)}.txt`;
       await dbxUpload(fname, listToText(list), true);
+      for(const item of list.items){
+        if(!item.image) continue;
+        const blob = await renderItemImageBlob(item);
+        await dbxUpload(`/Lists/${imageItemFilename(list, item)}`, blob);
+      }
     }
     backupError = null;
     dbxStatus='saved';dbxMessage='✓ Saved to Dropbox!';
@@ -2392,7 +2495,7 @@ function closeThemePicker() {
 // ══════════════════════════════════════════
 (function(){
   if(!('serviceWorker' in navigator)) return;
-  const sw=`const C='lists-v1';self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname])));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==C).map(n=>caches.delete(n)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
+  const sw=`const C='lists-v2';self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname])));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==C).map(n=>caches.delete(n)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
   const url=URL.createObjectURL(new Blob([sw],{type:'application/javascript'}));
   navigator.serviceWorker.register(url,{scope:'./'}).catch(()=>{});
 })();
