@@ -996,7 +996,9 @@ function updateBackupButtonLabel() {
   const isWarn = !isError && gdriveNeedsReconnect;
   let text;
   if (backupError) {
-    text = /reconnect/i.test(backupError) ? '⚠︎ Reconnect' : '⚠︎ Sync failed';
+    if (/reconnect/i.test(backupError))     text = '⚠︎ Reconnect';
+    else if (/blocked/i.test(backupError))  text = '⚠︎ Safeguard';
+    else                                    text = '⚠︎ Sync failed';
   } else if (gdriveStatus === 'reconnecting') {
     text = '☁︎ Syncing…';
   } else if (gdriveNeedsReconnect) {
@@ -1040,7 +1042,57 @@ function _isGDriveReconnectError(e) {
   return !!e && /session expired|please reconnect/i.test(e.message || '');
 }
 
+// Safety pre-flight for the auto-backup guard: peek at each connected
+// provider's master JSON and answer "would uploading an empty state right
+// now destroy real data?". Fail-closed: any inconclusive check (network
+// error, unexpected status, auth failure) is treated as "yes, refuse the
+// upload" — better to silently skip an auto-sync than nuke a good backup.
+async function _cloudHasAnythingToProtect() {
+  if (dbxToken) {
+    try {
+      await _ensureDropboxToken();
+      const res = await fetch('https://content.dropboxapi.com/2/files/download', {
+        method: 'POST',
+        headers: {'Authorization': `Bearer ${dbxToken}`, 'Dropbox-API-Arg': JSON.stringify({path: DROPBOX_BACKUP_PATH})},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.lists) && data.lists.length > 0) return true;
+        // Cloud master exists but is empty — nothing to protect on this provider.
+      } else if (res.status !== 409) {
+        // 409 = path/not_found (no master yet, safe). Anything else is inconclusive.
+        return true;
+      }
+    } catch (e) {
+      return true;
+    }
+  }
+  if (gdriveToken) {
+    try {
+      await _ensureGDriveToken();
+      const data = await _withGDriveAuth(() => gdriveDownload(gdriveToken));
+      if (data && Array.isArray(data.lists) && data.lists.length > 0) return true;
+    } catch (e) {
+      if (!e || !e.message || !e.message.includes('not_found')) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 async function _attemptAutoBackup() {
+  // Safety guard: never let a timer-fired auto-backup replace a non-empty
+  // cloud master JSON with an empty local state. Manual Save buttons bypass
+  // this — those represent explicit user intent. Only skip when at least one
+  // provider is connected AND we can verify (or must fail-closed on) that
+  // the cloud has data we shouldn't destroy.
+  if (lists.length === 0 && (dbxToken || gdriveToken)) {
+    if (await _cloudHasAnythingToProtect()) {
+      console.warn('[auto-backup] blocked: local lists are empty but cloud has data (or check inconclusive). Skipping to protect existing backup. Use manual Save to override.');
+      return { anySaved: false, guarded: true };
+    }
+  }
   let anySaved = false;
   if (dbxToken) {
     await _ensureDropboxToken();
@@ -1086,10 +1138,12 @@ async function _runAutoBackup() {
   const MAX_ATTEMPTS = 3;
   let lastErr = null;
   let anySaved = false;
+  let guarded = false;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const result = await _attemptAutoBackup();
       anySaved = result.anySaved;
+      guarded = !!result.guarded;
       lastErr = null;
       break;
     } catch(e) {
@@ -1106,6 +1160,9 @@ async function _runAutoBackup() {
   if (lastErr) {
     console.error('[auto-backup] giving up:', lastErr);
     backupError = lastErr.message || 'Backup failed';
+    updateBackupButtonLabel();
+  } else if (guarded) {
+    backupError = 'Auto-backup blocked: local is empty but cloud has data. Tap Save manually if this is intentional.';
     updateBackupButtonLabel();
   } else if (anySaved) {
     // At least one target saved (Dropbox and/or Drive). If Drive soft-failed,
@@ -1154,7 +1211,12 @@ function load() {
     const raw = localStorage.getItem('mylists_data');
     if (raw) {
       const d = JSON.parse(raw);
-      if (d.lists && d.lists.length) {
+      // Trust a valid stored state as-is, including a legitimately empty
+      // lists array. Previously an empty array collapsed to DEFAULT_LISTS,
+      // which made it impossible to distinguish "user emptied on purpose"
+      // from "storage missing / evicted" — the guard #1 pre-flight needs
+      // that distinction to protect the cloud copy correctly.
+      if (Array.isArray(d.lists)) {
         lists = d.lists; nextListId = d.nextListId||100; nextItemId = d.nextItemId||100;
         return;
       }
@@ -2253,7 +2315,13 @@ async function handleGDriveRestore() {
   try {
     await _ensureGDriveToken();
     const data = await _withGDriveAuth(() => gdriveDownload(gdriveToken));
-    if (data && data.lists) {
+    if (data && Array.isArray(data.lists)) {
+      if (data.lists.length === 0 && lists.length > 0) {
+        gdriveStatus = 'error';
+        gdriveMessage = `Cloud backup is empty (0 lists) but local has ${lists.length}. Refusing to overwrite — delete lists in the app first if you actually want to reset.`;
+        renderDbxPanel();
+        return;
+      }
       lists = data.lists;
       nextListId = data.nextListId || 100;
       nextItemId = data.nextItemId || 100;
@@ -2377,7 +2445,13 @@ async function handleRestore(){
     }
     if(!res.ok) throw new Error(await res.text());
     const data=await res.json();
-    if(data&&data.lists){
+    if(data && Array.isArray(data.lists)){
+      if (data.lists.length === 0 && lists.length > 0) {
+        dbxStatus = 'error';
+        dbxMessage = `Cloud backup is empty (0 lists) but local has ${lists.length}. Refusing to overwrite — delete lists in the app first if you actually want to reset.`;
+        renderDbxPanel();
+        return;
+      }
       lists=data.lists;nextListId=data.nextListId||100;nextItemId=data.nextItemId||100;
       save();
       const d=data.savedAt?new Date(data.savedAt).toLocaleDateString():'';
@@ -2514,7 +2588,7 @@ function closeThemePicker() {
 // ══════════════════════════════════════════
 (function(){
   if(!('serviceWorker' in navigator)) return;
-  const sw=`const C='lists-v4';self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname])));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==C).map(n=>caches.delete(n)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
+  const sw=`const C='lists-v5';self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname])));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==C).map(n=>caches.delete(n)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
   const url=URL.createObjectURL(new Blob([sw],{type:'application/javascript'}));
   navigator.serviceWorker.register(url,{scope:'./'}).catch(()=>{});
 })();
