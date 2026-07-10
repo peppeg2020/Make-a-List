@@ -862,65 +862,295 @@ function safeFilename(name) {
   return name.replace(/[^a-zA-Z0-9 _-]/g,'').trim().replace(/\s+/g,' ') || 'list';
 }
 
-// PNG filename for an image item: "<List> - <caption>.png", or "<List> - image-<id>.png" if empty.
-// Bypasses safeFilename's 'list' fallback so a blank caption falls through to the id-based name.
-function imageItemFilename(list, item) {
-  const raw = (item.text || '').trim();
-  let suffix = '';
-  if (raw) suffix = raw.replace(/[^a-zA-Z0-9 _-]/g,'').trim().replace(/\s+/g,' ');
-  if (!suffix) suffix = `image-${item.id}`;
-  return `${safeFilename(list.name)} - ${suffix}.png`;
+// Theme palette used for the exported list PNG. Mirrors the CSS variables
+// picked by currentTheme so the export matches what the user sees on-screen.
+function _exportPalette() {
+  const t = currentTheme;
+  if (t === 'notepad') return {
+    bg: {solid: '#FEFDF6'},
+    surface: '#F1EFE0', surfaceBorder: 'rgba(0,0,0,0.06)',
+    textTask: '#1C1C1E', textCaption: '#8E8E93', textSection: 'rgba(28,28,30,0.3)',
+    doneFill: '#F5C518', doneBorder: '#E8B800', doneCheck: '#1C1C1E',
+    textTaskDone: 'rgba(28,28,30,0.3)', textCaptionDone: 'rgba(28,28,30,0.25)',
+    doneRowBg: 'rgba(0,0,0,0.025)',
+    font: `-apple-system, 'Helvetica Neue', sans-serif`,
+    divider: '#ECE8DA',
+  };
+  if (t === 'retro') return {
+    bg: {solid: '#14061F'},
+    surface: '#241a3a', surfaceBorder: '#7B2FFF',
+    textTask: '#FFE600', textCaption: 'rgba(255,230,0,0.7)', textSection: 'rgba(0,240,255,0.5)',
+    doneFill: '#34c759', doneBorder: '#fff', doneCheck: '#fff',
+    textTaskDone: 'rgba(255,230,0,0.35)', textCaptionDone: 'rgba(255,230,0,0.3)',
+    doneRowBg: null,
+    font: `'Courier New', Courier, monospace`,
+    divider: 'rgba(123,47,255,0.4)',
+  };
+  return { // classic
+    bg: {gradient: ['#1a1a2e', '#16213e', '#0f3460']},
+    surface: '#242a44', surfaceBorder: 'rgba(255,255,255,0.08)',
+    textTask: 'rgba(255,255,255,0.92)', textCaption: 'rgba(255,255,255,0.65)', textSection: 'rgba(255,255,255,0.3)',
+    doneFill: '#34c759', doneBorder: '#fff', doneCheck: '#fff',
+    textTaskDone: 'rgba(255,255,255,0.35)', textCaptionDone: 'rgba(255,255,255,0.3)',
+    doneRowBg: null,
+    font: `-apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif`,
+    divider: 'rgba(255,255,255,0.08)',
+  };
 }
 
-// Render an image item to a PNG blob. If caption text exists, appends a dark
-// caption bar under the image with word-wrapped white text; min 60px, grows
-// with wrapped lines. No caption -> image alone at native resolution.
-async function renderItemImageBlob(item) {
-  const img = new Image();
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = () => reject(new Error('image decode failed for item ' + item.id));
-    img.src = item.image;
+// Word-wrap `text` to lines that fit within `maxW`, using ctx's current font.
+function _wrapLines(ctx, text, maxW) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  for (const w of words) {
+    const test = cur ? cur + ' ' + w : w;
+    if (ctx.measureText(test).width <= maxW) cur = test;
+    else { if (cur) lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
+
+function _roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.lineTo(x + w - rr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + rr);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - rr, y + h);
+  ctx.lineTo(x + rr, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - rr);
+  ctx.lineTo(x, y + rr);
+  ctx.quadraticCurveTo(x, y, x + rr, y);
+  ctx.closePath();
+}
+
+// Preload an item's image element so we can draw it. Returns null on failure
+// so one broken data URL doesn't kill the whole export.
+function _loadImg(src) {
+  return new Promise(resolve => {
+    const im = new Image();
+    im.onload = () => resolve(im);
+    im.onerror = () => resolve(null);
+    im.src = src;
   });
-  const w = img.naturalWidth, h = img.naturalHeight;
-  const caption = (item.text || '').trim();
-  const font = '15px -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif';
-  const padH = 16, padV = 12, lineH = 20;
+}
 
-  let lines = [], barH = 0;
-  if (caption) {
-    const m = document.createElement('canvas').getContext('2d');
-    m.font = font;
-    const maxW = w - 2 * padH;
-    const words = caption.split(/\s+/);
-    let cur = '';
-    for (const word of words) {
-      const test = cur ? cur + ' ' + word : word;
-      if (m.measureText(test).width <= maxW) cur = test;
-      else { if (cur) lines.push(cur); cur = word; }
+// Render the entire list to a single tall PNG matching the phone's on-screen
+// layout: current theme colors, rows in order (active then a "Completed"
+// divider then done), checkboxes, text items, image items with captions.
+// Returns null for an empty list.
+async function renderListImageBlob(list) {
+  if (!list.items || !list.items.length) return null;
+  const P = _exportPalette();
+  const W = 480;
+  const padH = 16;              // scroll container horizontal padding
+  const padTop = 20, padBottom = 24;
+  const rowGap = 8;
+  const rowRadius = 14;
+  const rowPadH = 12;
+  const rowPadVText = 14;
+  const rowPadVImg = 12;
+  const contentGap = 12;
+  const checkSize = 24;
+  const imgH = 180;
+  const imgRadius = 10;
+  const captionGap = 8;         // between image and caption line
+  const textSize = 16, textLine = 20;
+  const capSize = 13, capLine = 18;
+  const sectionH = 41;          // 20 top + 11 label + 10 bottom
+
+  const active = list.items.filter(i => !i.done);
+  const done   = list.items.filter(i =>  i.done);
+  const ordered = active.concat(done.length ? [{__section: true}] : [], done);
+
+  const contentX = padH + rowPadH + checkSize + contentGap;
+  const contentW = W - padH - rowPadH - (contentX);
+  // ↑ width available for text / image inside a row's content column.
+
+  // Preload images so measurement + draw share the same decoded bitmaps.
+  const imgs = new Map();
+  await Promise.all(list.items.filter(i => i.image).map(async i => {
+    const el = await _loadImg(i.image);
+    if (el) imgs.set(i.id, el);
+  }));
+
+  // Measurement pass — compute each row's height using a throwaway ctx.
+  const mCanvas = document.createElement('canvas');
+  const mCtx = mCanvas.getContext('2d');
+  const rows = ordered.map(entry => {
+    if (entry.__section) return {kind: 'section', h: sectionH};
+    const it = entry;
+    if (it.image) {
+      let capH = 0, capLines = [];
+      const cap = (it.text || '').trim();
+      if (cap) {
+        mCtx.font = `${capSize}px ${P.font}`;
+        capLines = _wrapLines(mCtx, cap, contentW);
+        capH = captionGap + capLines.length * capLine + 6; // +6 mimics the input's 4px+bottom-border+space
+      }
+      return {kind: 'image', h: rowPadVImg * 2 + imgH + capH, item: it, capLines};
     }
-    if (cur) lines.push(cur);
-    if (!lines.length) lines = [caption];
-    barH = Math.max(60, 2 * padV + lines.length * lineH);
+    mCtx.font = `${textSize}px ${P.font}`;
+    const lines = _wrapLines(mCtx, it.text || '', contentW);
+    const textH = lines.length * textLine;
+    return {kind: 'text', h: Math.max(rowPadVText * 2 + textH, 52), item: it, lines};
+  });
+
+  const totalH = padTop + rows.reduce((s, r) => s + r.h + rowGap, -rowGap) + padBottom;
+
+  // Real canvas.
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = Math.max(1, totalH);
+  const ctx = canvas.getContext('2d');
+
+  // Background.
+  if (P.bg.gradient) {
+    const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    g.addColorStop(0, P.bg.gradient[0]);
+    g.addColorStop(0.4, P.bg.gradient[1]);
+    g.addColorStop(1, P.bg.gradient[2]);
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = P.bg.solid;
+  }
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  let y = padTop;
+  for (const r of rows) {
+    if (r.kind === 'section') {
+      const midY = y + sectionH / 2;
+      ctx.strokeStyle = P.divider;
+      ctx.lineWidth = 1;
+      const label = 'COMPLETED';
+      ctx.font = `700 11px ${P.font}`;
+      ctx.textBaseline = 'middle';
+      const labelW = ctx.measureText(label).width + 22 * 2; // rough letter-spacing pad
+      const cx = W / 2;
+      ctx.beginPath(); ctx.moveTo(padH, midY); ctx.lineTo(cx - labelW / 2, midY); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(cx + labelW / 2, midY); ctx.lineTo(W - padH, midY); ctx.stroke();
+      ctx.fillStyle = P.textSection;
+      ctx.textAlign = 'center';
+      ctx.fillText(label, cx, midY);
+      ctx.textAlign = 'left';
+      y += r.h + rowGap;
+      continue;
+    }
+
+    const it = r.item;
+    // Row surface.
+    _roundRect(ctx, padH, y, W - padH * 2, r.h, rowRadius);
+    ctx.fillStyle = (it.done && P.doneRowBg) ? P.doneRowBg : P.surface;
+    ctx.fill();
+
+    // Checkbox at top-left of content area.
+    const checkX = padH + rowPadH;
+    const checkY = y + (r.kind === 'image' ? rowPadVImg + 2 : rowPadVText - 2);
+    _drawCheckbox(ctx, checkX, checkY, checkSize, it.done, P);
+
+    if (r.kind === 'image') {
+      const im = imgs.get(it.id);
+      const imgX = contentX;
+      const imgY = y + rowPadVImg;
+      const imgW = W - padH - rowPadH - contentX;
+
+      // Rounded-rect clip → cover-fit draw, matching object-fit:cover.
+      ctx.save();
+      _roundRect(ctx, imgX, imgY, imgW, imgH, imgRadius);
+      ctx.clip();
+      if (im) {
+        const scale = Math.max(imgW / im.naturalWidth, imgH / im.naturalHeight);
+        const dw = im.naturalWidth * scale, dh = im.naturalHeight * scale;
+        const dx = imgX + (imgW - dw) / 2, dy = imgY + (imgH - dh) / 2;
+        if (it.done) ctx.filter = 'grayscale(60%) opacity(0.4)';
+        ctx.drawImage(im, dx, dy, dw, dh);
+        ctx.filter = 'none';
+      } else {
+        ctx.fillStyle = P.surfaceBorder;
+        ctx.fillRect(imgX, imgY, imgW, imgH);
+      }
+      ctx.restore();
+
+      // Caption line (matches .caption-input: 13px, --text-caption, thin
+      // bottom border). No caption -> no bar, no border, nothing.
+      if (r.capLines && r.capLines.length && r.capLines[0]) {
+        ctx.fillStyle = it.done ? P.textCaptionDone : P.textCaption;
+        ctx.font = `${capSize}px ${P.font}`;
+        ctx.textBaseline = 'top';
+        let cy = imgY + imgH + captionGap;
+        for (const line of r.capLines) {
+          ctx.fillText(line, contentX, cy);
+          if (it.done) _strikeThrough(ctx, contentX, cy + capSize / 2, ctx.measureText(line).width, ctx.fillStyle);
+          cy += capLine;
+        }
+        // Bottom border on the last line.
+        ctx.strokeStyle = P.surfaceBorder;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(contentX, cy + 2);
+        ctx.lineTo(W - padH - rowPadH, cy + 2);
+        ctx.stroke();
+      }
+    } else {
+      // Text row.
+      const lines = r.lines;
+      const textH = lines.length * textLine;
+      const startY = y + (r.h - textH) / 2 + 1;
+      ctx.fillStyle = it.done ? P.textTaskDone : P.textTask;
+      ctx.font = `${textSize}px ${P.font}`;
+      ctx.textBaseline = 'top';
+      for (let i = 0; i < lines.length; i++) {
+        const ly = startY + i * textLine;
+        ctx.fillText(lines[i], contentX, ly);
+        if (it.done) _strikeThrough(ctx, contentX, ly + textSize / 2 + 1, ctx.measureText(lines[i]).width, ctx.fillStyle);
+      }
+    }
+
+    y += r.h + rowGap;
   }
 
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h + barH;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
-  if (caption) {
-    ctx.fillStyle = '#1c1c1e';
-    ctx.fillRect(0, h, w, barH);
-    ctx.fillStyle = '#ffffff';
-    ctx.textBaseline = 'top';
-    ctx.font = font;
-    const startY = h + (barH - lines.length * lineH) / 2;
-    for (let i = 0; i < lines.length; i++) ctx.fillText(lines[i], padH, startY + i * lineH);
-  }
   return await new Promise((resolve, reject) => {
     canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob returned null')), 'image/png');
   });
+}
+
+function _drawCheckbox(ctx, x, y, size, done, P) {
+  const cx = x + size / 2, cy = y + size / 2, r = size / 2 - 1;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  if (done) {
+    ctx.fillStyle = P.doneFill;
+    ctx.fill();
+    ctx.strokeStyle = P.doneBorder;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.strokeStyle = P.doneCheck;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x + 7, y + 12.5);
+    ctx.lineTo(x + 10.5, y + 16);
+    ctx.lineTo(x + 17, y + 9);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = '#c7c7cc';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+}
+
+function _strikeThrough(ctx, x, midY, width, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, midY);
+  ctx.lineTo(x + width, midY);
+  ctx.stroke();
+  ctx.restore();
 }
 
 // Auto-backup timer
@@ -991,13 +1221,10 @@ async function _attemptAutoBackup() {
     await _ensureDropboxToken();
     await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
     for (const list of lists) {
-      const fname = `/Lists/${safeFilename(list.name)}.txt`;
-      await dbxUpload(fname, listToText(list), true);
-      for (const item of list.items) {
-        if (!item.image) continue;
-        const blob = await renderItemImageBlob(item);
-        await dbxUpload(`/Lists/${imageItemFilename(list, item)}`, blob);
-      }
+      const base = safeFilename(list.name);
+      await dbxUpload(`/Lists/${base}.txt`, listToText(list), true);
+      const listBlob = await renderListImageBlob(list);
+      if (listBlob) await dbxUpload(`/Lists/${base}.png`, listBlob);
     }
     anySaved = true;
   }
@@ -1007,12 +1234,10 @@ async function _attemptAutoBackup() {
       await _withGDriveAuth(async () => {
         await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
         for (const list of lists) {
-          await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
-          for (const item of list.items) {
-            if (!item.image) continue;
-            const blob = await renderItemImageBlob(item);
-            await gdriveUploadBlob(gdriveToken, imageItemFilename(list, item), blob, 'image/png');
-          }
+          const base = safeFilename(list.name);
+          await gdriveUploadText(gdriveToken, `${base}.txt`, listToText(list));
+          const listBlob = await renderListImageBlob(list);
+          if (listBlob) await gdriveUploadBlob(gdriveToken, `${base}.png`, listBlob, 'image/png');
         }
       });
       gdriveNeedsReconnect = false;
@@ -2201,12 +2426,10 @@ async function handleGDriveSave() {
   const doSave = async () => {
     await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
     for (const list of lists) {
-      await gdriveUploadText(gdriveToken, `${safeFilename(list.name)}.txt`, listToText(list));
-      for (const item of list.items) {
-        if (!item.image) continue;
-        const blob = await renderItemImageBlob(item);
-        await gdriveUploadBlob(gdriveToken, imageItemFilename(list, item), blob, 'image/png');
-      }
+      const base = safeFilename(list.name);
+      await gdriveUploadText(gdriveToken, `${base}.txt`, listToText(list));
+      const listBlob = await renderListImageBlob(list);
+      if (listBlob) await gdriveUploadBlob(gdriveToken, `${base}.png`, listBlob, 'image/png');
     }
   };
   try {
@@ -2321,15 +2544,12 @@ async function handleBackup(){
     await _ensureDropboxToken();
     // 1. Save machine-readable restore file
     await dbxUpload(DROPBOX_BACKUP_PATH, {lists,nextListId,nextItemId,savedAt:new Date().toISOString()});
-    // 2. Save each list as a readable .txt file in a Lists/ folder
+    // 2. Save each list as a readable .txt + one tall .png in a Lists/ folder
     for(const list of lists){
-      const fname=`/Lists/${safeFilename(list.name)}.txt`;
-      await dbxUpload(fname, listToText(list), true);
-      for(const item of list.items){
-        if(!item.image) continue;
-        const blob = await renderItemImageBlob(item);
-        await dbxUpload(`/Lists/${imageItemFilename(list, item)}`, blob);
-      }
+      const base = safeFilename(list.name);
+      await dbxUpload(`/Lists/${base}.txt`, listToText(list), true);
+      const listBlob = await renderListImageBlob(list);
+      if (listBlob) await dbxUpload(`/Lists/${base}.png`, listBlob);
     }
     backupError = null;
     dbxStatus='saved';dbxMessage='✓ Saved to Dropbox!';
@@ -2495,7 +2715,7 @@ function closeThemePicker() {
 // ══════════════════════════════════════════
 (function(){
   if(!('serviceWorker' in navigator)) return;
-  const sw=`const C='lists-v2';self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname])));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==C).map(n=>caches.delete(n)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
+  const sw=`const C='lists-v3';self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname])));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==C).map(n=>caches.delete(n)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
   const url=URL.createObjectURL(new Blob([sw],{type:'application/javascript'}));
   navigator.serviceWorker.register(url,{scope:'./'}).catch(()=>{});
 })();
