@@ -2070,8 +2070,44 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')document.getElementB
   // ── Dropbox PKCE callback (URL query params ?code=...) ──
   const urlQ = new URLSearchParams(window.location.search);
   const dbxCode = urlQ.get('code');
+  const dbxErr  = urlQ.get('error') || urlQ.get('error_description');
   const dbxVerifier = sessionStorage.getItem('dbx_pkce_verifier');
+  const inDbxPopup = !!(window.opener && window.opener !== window && (dbxCode || dbxErr));
+  if (inDbxPopup) {
+    // Popup branch: we're the OAuth return window. Finish the exchange here,
+    // postMessage tokens back to the main PWA, then close. The main window
+    // never navigates, so its localStorage bucket stays intact — this is the
+    // whole point of the popup rewrite.
+    (async () => {
+      try {
+        if (dbxErr) throw new Error(dbxErr);
+        const res = await fetch('https://api.dropboxapi.com/oauth2/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ code: dbxCode, grant_type: 'authorization_code', client_id: DROPBOX_APP_KEY, redirect_uri: _appBaseUrl(), code_verifier: dbxVerifier || '' }),
+        });
+        const data = await res.json();
+        if (!data.access_token) throw new Error(data.error_description || 'Token exchange failed');
+        try {
+          window.opener.postMessage({
+            type: 'dbx_oauth_tokens',
+            access_token: data.access_token,
+            refresh_token: data.refresh_token || null,
+            expires_in: data.expires_in || 0,
+          }, window.location.origin);
+        } catch(_){}
+      } catch(e) {
+        try { window.opener.postMessage({ type: 'dbx_oauth_error', error: String(e.message || e) }, window.location.origin); } catch(_){}
+      } finally {
+        sessionStorage.removeItem('dbx_pkce_verifier');
+        try { window.close(); } catch(_){}
+      }
+    })();
+    return; // skip the rest of the boot-time init in the popup
+  }
   if (dbxCode && dbxVerifier) {
+    // Fallback for a stale full-page-redirect return (e.g. an old bookmark or
+    // an opener-less popup): do the exchange in-window like the old flow.
     sessionStorage.removeItem('dbx_pkce_verifier');
     window.history.replaceState(null, '', window.location.pathname);
     _exchangeDropboxCode(dbxCode, dbxVerifier).then(() => { renderDbxPanel(); updateDbxButtons(); });
@@ -2347,13 +2383,88 @@ function handleGDriveDisconnect() {
   updateBackupButtonLabel();
   renderDbxPanel();
 }
+// Popup-based OAuth. Full-page redirects break iOS PWAs: the OS can hand the
+// returning navigation a fresh storage bucket, and the app comes back empty.
+// A popup keeps the main window put, so its storage is untouched.
 function startDropboxOAuth() {
+  // Open the popup synchronously inside the click handler — iOS/Safari only
+  // treats window.open as user-initiated if it happens before any await.
+  const w = 520, h = 680;
+  const y = Math.max(0, ((window.outerHeight || 800) - h) / 2 + (window.screenY || 0));
+  const x = Math.max(0, ((window.outerWidth  || 600) - w) / 2 + (window.screenX || 0));
+  const popup = window.open('about:blank', 'dbx_oauth', `width=${w},height=${h},left=${x},top=${y}`);
+  if (!popup) {
+    dbxStatus = 'error';
+    dbxMessage = 'Popup blocked. Allow popups for this site and try again.';
+    renderDbxPanel();
+    return;
+  }
+
+  let settled = false;
+  let pollId = null;
+  const cleanup = () => {
+    window.removeEventListener('message', onMessage);
+    if (pollId) { clearInterval(pollId); pollId = null; }
+  };
+  const finish = (fn) => { if (settled) return; settled = true; cleanup(); fn(); };
+
+  const onMessage = (ev) => {
+    if (ev.origin !== window.location.origin) return;
+    const d = ev.data;
+    if (!d || (d.type !== 'dbx_oauth_tokens' && d.type !== 'dbx_oauth_error')) return;
+    if (d.type === 'dbx_oauth_tokens') {
+      finish(() => {
+        dbxToken = d.access_token;
+        dbxRefreshToken = d.refresh_token || null;
+        dbxTokenExpiry = d.expires_in ? Date.now() + d.expires_in * 1000 : 0;
+        localStorage.setItem('dbx_token', dbxToken);
+        if (dbxRefreshToken) localStorage.setItem('dbx_refresh_token', dbxRefreshToken);
+        localStorage.setItem('dbx_token_expiry', String(dbxTokenExpiry));
+        dbxStatus = null; dbxMessage = '';
+        try { popup.close(); } catch(_){}
+        renderDbxPanel();
+        updateDbxButtons();
+      });
+    } else {
+      finish(() => {
+        dbxStatus = 'error';
+        dbxMessage = 'Connection failed: ' + (d.error || 'unknown error');
+        try { popup.close(); } catch(_){}
+        renderDbxPanel();
+      });
+    }
+  };
+  window.addEventListener('message', onMessage);
+
+  // If the user closes the popup without completing auth, surface a gentle
+  // message. Small grace delay lets a pending postMessage arrive first.
+  pollId = setInterval(() => {
+    if (popup.closed) {
+      clearInterval(pollId); pollId = null;
+      setTimeout(() => finish(() => {
+        dbxStatus = 'error';
+        dbxMessage = 'Connection cancelled.';
+        sessionStorage.removeItem('dbx_pkce_verifier');
+        renderDbxPanel();
+      }), 250);
+    }
+  }, 500);
+
   (async () => {
-    const verifier = _pkceRandStr(64);
-    const challenge = await _pkceChallenge(verifier);
-    sessionStorage.setItem('dbx_pkce_verifier', verifier);
-    const redirect = encodeURIComponent(_appBaseUrl());
-    window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${DROPBOX_APP_KEY}&response_type=code&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&token_access_type=offline&redirect_uri=${redirect}`;
+    try {
+      const verifier = _pkceRandStr(64);
+      const challenge = await _pkceChallenge(verifier);
+      sessionStorage.setItem('dbx_pkce_verifier', verifier);
+      const redirect = encodeURIComponent(_appBaseUrl());
+      popup.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${DROPBOX_APP_KEY}&response_type=code&code_challenge=${encodeURIComponent(challenge)}&code_challenge_method=S256&token_access_type=offline&redirect_uri=${redirect}`;
+    } catch(e) {
+      finish(() => {
+        dbxStatus = 'error';
+        dbxMessage = 'Connection failed: ' + e.message;
+        try { popup.close(); } catch(_){}
+        renderDbxPanel();
+      });
+    }
   })();
 }
 
@@ -2588,7 +2699,7 @@ function closeThemePicker() {
 // ══════════════════════════════════════════
 (function(){
   if(!('serviceWorker' in navigator)) return;
-  const sw=`const C='lists-v5';self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname])));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==C).map(n=>caches.delete(n)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
+  const sw=`const C='lists-v6';self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll([self.location.pathname])));self.skipWaiting();});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==C).map(n=>caches.delete(n)))));self.clients.claim();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
   const url=URL.createObjectURL(new Blob([sw],{type:'application/javascript'}));
   navigator.serviceWorker.register(url,{scope:'./'}).catch(()=>{});
 })();
