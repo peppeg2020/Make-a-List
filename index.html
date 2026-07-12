@@ -992,36 +992,40 @@ function updateBackupButtonLabel() {
   const homeLbl = document.getElementById('dbx-home-label');
   const btn = document.getElementById('dbx-open-btn');
   const homeBtn = document.getElementById('dbx-open-btn-home');
-  const isError = !!backupError;
-  const isWarn = !isError && gdriveNeedsReconnect;
+  const connected = dbxToken || gdriveToken;
+  const isSaving = autoBackupInFlight
+                || dbxStatus === 'saving'
+                || gdriveStatus === 'saving'
+                || gdriveStatus === 'reconnecting';
+  const isFailed = !isSaving && (!!backupError || gdriveNeedsReconnect);
+  const isRested = !isSaving && !isFailed && connected && lastBackupTime;
   let text;
-  if (backupError) {
-    if (/reconnect/i.test(backupError))     text = '⚠︎ Reconnect';
-    else if (/blocked/i.test(backupError))  text = '⚠︎ Safeguard';
-    else                                    text = '⚠︎ Sync failed';
-  } else if (gdriveStatus === 'reconnecting') {
-    text = '☁︎ Syncing…';
-  } else if (gdriveNeedsReconnect) {
-    text = '☁︎ Press to Sync';
+  if (isSaving) {
+    text = '⟳ saving…';
+  } else if (isFailed) {
+    text = '✕ not backed up · tap to retry';
+  } else if (isRested) {
+    const d = new Date(lastBackupTime);
+    const now = new Date();
+    const diffMin = Math.round((now - d) / 60000);
+    let timeStr;
+    if (diffMin < 1) timeStr = 'just now';
+    else if (diffMin < 60) timeStr = diffMin + 'm ago';
+    else if (diffMin < 1440) timeStr = Math.round(diffMin/60) + 'h ago';
+    else timeStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+    text = '✓ backed up · ' + timeStr;
   } else {
-    const connected = dbxToken || gdriveToken;
     text = '☁️ Backup';
-    if (connected && lastBackupTime) {
-      const d = new Date(lastBackupTime);
-      const now = new Date();
-      const diffMin = Math.round((now - d) / 60000);
-      let timeStr;
-      if (diffMin < 1) timeStr = 'just now';
-      else if (diffMin < 60) timeStr = diffMin + 'm ago';
-      else if (diffMin < 1440) timeStr = Math.round(diffMin/60) + 'h ago';
-      else timeStr = d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
-      text = '☁️ ' + timeStr;
-    }
   }
   if (lbl) lbl.textContent = text;
   if (homeLbl) homeLbl.textContent = text;
-  if (btn) { btn.classList.toggle('error', isError); btn.classList.toggle('warn', isWarn); }
-  if (homeBtn) { homeBtn.classList.toggle('error', isError); homeBtn.classList.toggle('warn', isWarn); }
+  const apply = (b) => {
+    if (!b) return;
+    b.classList.toggle('error', isFailed);
+    b.classList.toggle('warn', isSaving);
+    b.classList.toggle('connected', isRested);
+  };
+  apply(btn); apply(homeBtn);
 }
 
 let autoBackupTimer = null;
@@ -1135,6 +1139,7 @@ async function _runAutoBackup() {
   // it pending and re-run once at the end so we don't skip the latest state.
   if (autoBackupInFlight) { autoBackupRerunPending = true; return; }
   autoBackupInFlight = true;
+  updateBackupButtonLabel();
   const MAX_ATTEMPTS = 3;
   let lastErr = null;
   let anySaved = false;
@@ -1157,6 +1162,7 @@ async function _runAutoBackup() {
       break;
     }
   }
+  autoBackupInFlight = false;
   if (lastErr) {
     console.error('[auto-backup] giving up:', lastErr);
     backupError = lastErr.message || 'Backup failed';
@@ -1175,7 +1181,6 @@ async function _runAutoBackup() {
     backupError = null;
     updateBackupButtonLabel();
   }
-  autoBackupInFlight = false;
   if (autoBackupRerunPending) {
     autoBackupRerunPending = false;
     _runAutoBackup();
@@ -1326,12 +1331,17 @@ function clearListsSearch(){
   renderListsScreen();
 }
 
-// Pill entry point. In the soft Drive-reconnect state, one tap goes straight
-// to OAuth via handleGDriveReconnect() — no intermediate panel. Otherwise
-// (normal or hard-error), open the Dropbox/Drive panel as before.
+// Pill entry point. Soft Drive-reconnect goes straight to OAuth. Hard failure
+// (red "tap to retry") forces an immediate re-sync, bypassing the debounce.
+// Otherwise open the Dropbox/Drive panel.
 function handleBackupPillClick(){
-  if (!backupError && gdriveNeedsReconnect && gdriveStatus !== 'reconnecting') {
+  if (gdriveNeedsReconnect && gdriveStatus !== 'reconnecting') {
     handleGDriveReconnect();
+    return;
+  }
+  if (backupError) {
+    if (autoBackupTimer) { clearTimeout(autoBackupTimer); autoBackupTimer = null; }
+    _runAutoBackup();
     return;
   }
   openDbxPanel();
