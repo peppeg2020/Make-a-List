@@ -1421,7 +1421,8 @@ const sl = document.getElementById('sort-label');
     const remaining = l.items.filter(i=>!i.done).length;
     const total = l.items.length;
     const countStr = total === 0 ? 'Empty' : remaining + ' of ' + total + ' remaining';
-    const dateStr = l.createdAt ? new Date(l.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '';
+    const lastModified = l.updatedAt || l.createdAt;
+    const dateStr = lastModified ? new Date(lastModified).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '';
     return `
     <div class="lc-wrap" id="lcw-${l.id}">
       <div class="lc-del-bg">
