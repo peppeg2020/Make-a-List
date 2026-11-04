@@ -1370,7 +1370,9 @@ function openDbxPanel(){
   renderDbxPanel();
 }
 
-let listsSort = 'dateAdded'; // dateAdded | dateModified | nameAZ | nameZA
+const SORT_LABELS = { dateAdded:'↕ Date Added', dateModified:'↕ Date Modified', nameAZ:'↕ A → Z', nameZA:'↕ Z → A' };
+const savedListsSort = localStorage.getItem('lists_sort');
+let listsSort = Object.hasOwn(SORT_LABELS, savedListsSort) ? savedListsSort : 'dateAdded';
 
 function openListsMenu(){ document.getElementById('lists-menu-overlay').style.display='block'; }
 function closeListsMenu(){ document.getElementById('lists-menu-overlay').style.display='none'; }
@@ -1383,9 +1385,12 @@ function openSortListsSheet(){
   });
 }
 function closeSortListsSheet(){ document.getElementById('sort-lists-overlay').style.display='none'; }
-function setSortLists(order){ listsSort=order; closeSortListsSheet(); renderListsScreen(); }
-
-const SORT_LABELS = { dateAdded:'↕ Date Added', dateModified:'↕ Date Modified', nameAZ:'↕ A → Z', nameZA:'↕ Z → A' };
+function setSortLists(order){
+  listsSort = order;
+  localStorage.setItem('lists_sort', order);
+  closeSortListsSheet();
+  renderListsScreen();
+}
 
 function renderListsScreen() {
   // Sort
