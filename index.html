@@ -608,6 +608,7 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
   <div class="list-hero">
     <div class="list-hero-icon" id="hero-icon"></div>
     <h1 id="hero-title"></h1>
+    <p class="sub" id="hero-sub" aria-live="polite"></p>
   </div>
 
   <!-- Search bar (collapsible) -->
@@ -1677,6 +1678,7 @@ function renderDetailScreen(){
   const list = activeList(); if(!list) return;
   document.getElementById('hero-icon').textContent = list.icon;
   document.getElementById('hero-title').textContent = list.name;
+  updateHeroSub(list);
   updateDbxButtons();
 
   const q = search.trim().toLowerCase();
@@ -1711,7 +1713,7 @@ function renderDetailScreen(){
   scroll.querySelectorAll('.caption-input').forEach(el=>{
     el.addEventListener('input', e=>{
       const item = activeList().items.find(i=>i.id===parseInt(el.dataset.id));
-      if(item){ item.text=e.target.value; save(); updateHeroSub(); }
+      if(item){ item.text=e.target.value; save(); }
     });
   });
   // Attach text editors and keep the sizing mirror in sync.
@@ -1751,8 +1753,12 @@ function updateTip(){
   tip.style.display = activeCount >= 2 ? 'block' : 'none';
 }
 
-function updateHeroSub(){
-  const list = activeList(); if(!list) return;
+function updateHeroSub(list){
+  const total = list.items.length;
+  const completed = list.items.filter(item => item.done).length;
+  const itemLabel = total === 1 ? 'item' : 'items';
+  document.getElementById('hero-sub').innerHTML =
+    `<strong>${total}</strong> ${itemLabel} total · <strong>${completed}</strong> completed`;
 }
 
 function renderItemHTML(item, index, q){
