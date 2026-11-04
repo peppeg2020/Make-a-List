@@ -203,7 +203,7 @@ body{
 }
 input,textarea{-webkit-user-select:text;user-select:text}
 input{-webkit-appearance:none}
-input::placeholder{color:var(--text-tertiary)}
+input::placeholder,.task-edit-input::placeholder{color:var(--text-tertiary)}
 
 @keyframes fadeIn  {from{opacity:0}to{opacity:1}}
 @keyframes slideUp {from{transform:translateY(60px);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -398,11 +398,19 @@ input::placeholder{color:var(--text-tertiary)}
 .task-content{flex:1;min-width:0}
 .task-text{font-size:16px;color:var(--text-task);letter-spacing:-0.1px}
 .task-text.done{color:rgba(255,255,255,0.35);text-decoration:line-through}
+.task-editor{position:relative}
+.task-editor::before,.task-edit-input{
+  font:16px/1.25 var(--font-body);letter-spacing:-0.1px;
+  white-space:pre-wrap;overflow-wrap:anywhere;
+}
+.task-editor::before{
+  /* Mirror the text to size the row, including an empty final line. */
+  content:attr(data-text) " ";display:block;visibility:hidden;
+}
 .task-edit-input{
-  width:100%;background:transparent;border:none;outline:none;
-  font-size:16px;font-family:var(--font-body);
-  color:var(--text-task);letter-spacing:-0.1px;
-  padding:0;caret-color:var(--accent);
+  position:absolute;inset:0;display:block;width:100%;height:100%;
+  background:transparent;border:none;outline:none;resize:none;overflow:hidden;
+  color:var(--text-task);padding:0;margin:0;caret-color:var(--accent);
 }
 .task-edit-input.done{color:rgba(255,255,255,0.35);text-decoration:line-through}
 .task-edit-input:focus{color:var(--text-primary)}
@@ -1700,17 +1708,18 @@ function renderDetailScreen(){
       if(item){ item.text=e.target.value; save(); updateHeroSub(); }
     });
   });
-  // Attach edit inputs (text items)
+  // Attach text editors and keep the sizing mirror in sync.
   scroll.querySelectorAll('.task-edit-input').forEach(el=>{
-    el.addEventListener('input', e=>{
+    el.addEventListener('input', ()=>{
+      el.parentElement.dataset.text = el.value;
       const item = activeList().items.find(i=>i.id===parseInt(el.dataset.id));
-      if(item){ item.text=e.target.value; save(); }
+      if(item){ item.text=el.value; save(); }
     });
     // Dismiss keyboard on Enter
     el.addEventListener('keydown', e=>{
-      if(e.key==='Enter'){ el.blur(); }
+      if(e.key==='Enter' && !e.isComposing){ e.preventDefault(); el.blur(); }
     });
-    // Prevent drag handle from interfering with caption editing
+    // Keep text editing separate from the row swipe gesture
     el.addEventListener('touchstart', e=>e.stopPropagation(), {passive:true});
   });
   // Attach item swipe-to-delete — same as front page pattern
@@ -1760,9 +1769,10 @@ function renderItemHTML(item, index, q){
     </div>
     <input class="caption-input${item.done?' done':''}" data-id="${item.id}" value="${esc(item.text||'')}" placeholder="Add a caption…"/>`;
   } else {
-    content=`<input class="task-edit-input${item.done?' done':''}" data-id="${item.id}"
-      value="${esc(item.text||'')}" placeholder="Item…"
-      ${item.done ? 'readonly' : ''}/>`;
+    const text = esc(item.text || '');
+    content=`<div class="task-editor" data-text="${text}"><textarea class="task-edit-input${item.done?' done':''}" data-id="${item.id}"
+      rows="1" placeholder="Item…" ${item.done ? 'readonly' : ''}>
+${text}</textarea></div>`;
   }
 
   const handle = (!item.done && !search)
@@ -1967,7 +1977,6 @@ function onDragMove(e){
   const ghostCY=drag.ghostTop+(clientY-drag.startY)+drag.ghost.offsetHeight/2;
   let best=drag.toIndex, bestDist=Infinity;
   drag.rowIds.forEach((rid,i)=>{
-    if(rid===drag.id) return;
     const el=document.getElementById('task-'+rid); if(!el) return;
     const r=el.getBoundingClientRect();
     const dist=Math.abs(ghostCY-(r.top+r.height/2));
