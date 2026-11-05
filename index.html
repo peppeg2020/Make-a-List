@@ -684,10 +684,9 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
       <button onclick="sortItems('manual')" class="sheet-row">↕️ Manual Order (Default)</button>
       <button onclick="sortItems('dateModified')" class="sheet-row">🕐 Date Modified (Newest First)</button>
       <button onclick="sortItems('dateAdded')" class="sheet-row">📅 Date Added (Newest First)</button>
+      <button onclick="sortItems('dateAddedOldest')" class="sheet-row">📅 Date Added (Oldest First)</button>
       <button onclick="sortItems('az')" class="sheet-row">🔤 A → Z</button>
       <button onclick="sortItems('za')" class="sheet-row">🔤 Z → A</button>
-      <button onclick="sortItems('incomplete')" class="sheet-row">⭕ Pending First</button>
-      <button onclick="sortItems('completed')" class="sheet-row">✅ Completed First</button>
     </div>
     <button onclick="closeSortSheet()" class="sheet-cancel">Cancel</button>
   </div>
@@ -1682,16 +1681,15 @@ function sortItems(order){
   if(order === 'dateAdded'){
     // Legacy items have no timestamps; their increasing IDs preserve add order.
     list.items.sort((a,b) => (b.createdAt||0)-(a.createdAt||0) || b.id-a.id);
+  } else if(order === 'dateAddedOldest'){
+    list.items.sort((a,b) => (a.createdAt||0)-(b.createdAt||0) || a.id-b.id);
   } else if(order === 'dateModified'){
     list.items.sort((a,b) => (b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0) || b.id-a.id);
   } else if(order === 'az'){
     list.items.sort((a,b) => (a.text||'').localeCompare(b.text||''));
   } else if(order === 'za'){
     list.items.sort((a,b) => (b.text||'').localeCompare(a.text||''));
-  } else if(order === 'incomplete'){
-    list.items.sort((a,b) => a.done - b.done);
-  } else if(order === 'completed'){
-    list.items.sort((a,b) => b.done - a.done);
+
   }
   // 'manual' does nothing — keeps current order
   save(); closeSortSheet(); renderDetailScreen();
