@@ -1754,11 +1754,11 @@ function updateTip(){
 }
 
 function updateHeroSub(list){
-  const total = list.items.length;
   const completed = list.items.filter(item => item.done).length;
-  const itemLabel = total === 1 ? 'item' : 'items';
+  const pending = list.items.filter(item => !item.done).length;
+  const itemLabel = pending === 1 ? 'item' : 'items';
   document.getElementById('hero-sub').innerHTML =
-    `<strong>${total}</strong> ${itemLabel} total · <strong>${completed}</strong> completed`;
+    `<strong>${pending}</strong> ${itemLabel} pending · <strong>${completed}</strong> completed`;
 }
 
 function renderItemHTML(item, index, q){
