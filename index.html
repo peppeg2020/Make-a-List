@@ -471,6 +471,7 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
 .sort-lists-opt.active{color:var(--accent);font-weight:600}
 .sort-lists-opt:last-child{border-bottom:none}
 /* ── Sheet utility classes ── */
+#sort-overlay > div{max-height:100%;overflow-y:auto}
 .sheet-panel{background:var(--surface-raised);border-radius:16px;overflow:hidden;margin-bottom:10px}
 .sheet-header{padding:14px 16px 10px;text-align:center;color:var(--text-secondary);font-size:13px;font-weight:600;border-bottom:1px solid var(--divider)}
 .sheet-row{width:100%;padding:16px;background:none;border:none;border-bottom:1px solid var(--divider);cursor:pointer;color:var(--text-primary);font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px;font-family:var(--font-body)}
@@ -681,9 +682,11 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
     <div class="sheet-panel">
       <div class="sheet-header">Sort Items</div>
       <button onclick="sortItems('manual')" class="sheet-row">↕️ Manual Order (Default)</button>
+      <button onclick="sortItems('dateModified')" class="sheet-row">🕐 Date Modified (Newest First)</button>
+      <button onclick="sortItems('dateAdded')" class="sheet-row">📅 Date Added (Newest First)</button>
       <button onclick="sortItems('az')" class="sheet-row">🔤 A → Z</button>
       <button onclick="sortItems('za')" class="sheet-row">🔤 Z → A</button>
-      <button onclick="sortItems('incomplete')" class="sheet-row">⭕ Incomplete First</button>
+      <button onclick="sortItems('incomplete')" class="sheet-row">⭕ Pending First</button>
       <button onclick="sortItems('completed')" class="sheet-row">✅ Completed First</button>
     </div>
     <button onclick="closeSortSheet()" class="sheet-cancel">Cancel</button>
@@ -1676,7 +1679,12 @@ function closeSortSheet(){
 }
 function sortItems(order){
   const list = activeList(); if(!list) return;
-  if(order === 'az'){
+  if(order === 'dateAdded'){
+    // Legacy items have no timestamps; their increasing IDs preserve add order.
+    list.items.sort((a,b) => (b.createdAt||0)-(a.createdAt||0) || b.id-a.id);
+  } else if(order === 'dateModified'){
+    list.items.sort((a,b) => (b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0) || b.id-a.id);
+  } else if(order === 'az'){
     list.items.sort((a,b) => (a.text||'').localeCompare(b.text||''));
   } else if(order === 'za'){
     list.items.sort((a,b) => (b.text||'').localeCompare(a.text||''));
@@ -1758,7 +1766,7 @@ function renderDetailScreen(){
   scroll.querySelectorAll('.caption-input').forEach(el=>{
     el.addEventListener('input', e=>{
       const item = activeList().items.find(i=>i.id===parseInt(el.dataset.id));
-      if(item){ item.text=e.target.value; save(); }
+      if(item){ item.text=e.target.value; item.updatedAt=Date.now(); save(); }
     });
   });
   // Attach text editors and keep the sizing mirror in sync.
@@ -1766,7 +1774,7 @@ function renderDetailScreen(){
     el.addEventListener('input', ()=>{
       el.parentElement.dataset.text = el.value;
       const item = activeList().items.find(i=>i.id===parseInt(el.dataset.id));
-      if(item){ item.text=el.value; save(); }
+      if(item){ item.text=el.value; item.updatedAt=Date.now(); save(); }
     });
     // Dismiss keyboard on Enter
     el.addEventListener('keydown', e=>{
@@ -1864,7 +1872,8 @@ function addTextTask(){
   const text = inp.value.trim(); if(!text) return;
   const list = activeList(); if(!list) return;
   inp.value = '';
-  list.items.unshift({id:nextItemId++, text, done:false, image:null});
+  const now = Date.now();
+  list.items.unshift({id:nextItemId++, text, done:false, image:null, createdAt:now, updatedAt:now});
   haptic('light');
   save();
   renderDetailScreen();
@@ -1911,7 +1920,8 @@ function addImageTask(fileInput){
   const reader=new FileReader();
   reader.onload=ev=>{
     if (!lists.includes(list)) return;
-    list.items.unshift({id:nextItemId++,text:'',done:false,image:ev.target.result});
+    const now = Date.now();
+    list.items.unshift({id:nextItemId++,text:'',done:false,image:ev.target.result,createdAt:now,updatedAt:now});
     save(); renderDetailScreen();
   };
   reader.onerror = () => alert('This photo could not be read. Please try selecting it again.');
@@ -1923,6 +1933,7 @@ function toggleItem(id){
   const item=list.items.find(i=>i.id===id);
   if(item){
     item.done=!item.done;
+    item.updatedAt=Date.now();
     haptic(item.done ? 'medium' : 'light');
     save(); renderDetailScreen();
     updateTip();
