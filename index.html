@@ -396,6 +396,9 @@ input::placeholder,.task-edit-input::placeholder{color:var(--text-tertiary)}
 .task-row.is-image .check-btn{margin-top:2px}
 
 .task-content{flex:1;min-width:0}
+.item-photos{display:flex;gap:8px;overflow-x:auto;scroll-snap-type:x proximity}
+.item-photos .img-wrapper{flex:0 0 85%;scroll-snap-align:start}
+.item-photos .img-wrapper:only-child{flex-basis:100%}
 .item-more-btn{flex-shrink:0;align-self:flex-start;width:36px;min-height:44px;padding:0;background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer}
 #item-actions-overlay .sheet-row{justify-content:flex-start;padding:18px 24px;gap:16px}
 #item-actions-overlay .sheet-row svg{width:22px;height:22px;color:var(--accent);flex-shrink:0}
@@ -635,7 +638,7 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
       class="add-item-input"/>
     <button onclick="addTextTask()" class="add-item-btn">+</button>
     <button onclick="document.getElementById('file-input').click()" title="Add photo" style="flex-shrink:0;width:44px;height:44px;border-radius:12px;border:none;cursor:pointer;background:var(--pill-bg);border:1.5px solid var(--pill-border);display:flex;align-items:center;justify-content:center;font-size:24px;">📷</button>
-    <input type="file" id="file-input" accept="image/*" style="display:none" onchange="addImageTask(this)"/>
+    <input type="file" id="file-input" accept="image/*" multiple style="display:none" onchange="addImageTask(this)"/>
   </div>
 
   <div id="list-scroll"></div>
@@ -917,13 +920,13 @@ function listToHTML(list) {
 
   const rowHTML = it => {
     const doneCls = it.done ? ' done' : '';
-    if (it.image) {
+    if (itemPhotos(it).length) {
       const cap = (it.text || '').trim();
       const capLine = cap ? `\n      <div class="caption${doneCls}">${esc(cap)}</div>` : '';
       return `    <div class="row is-image${doneCls}">
       <div class="check${doneCls}" aria-hidden="true"></div>
       <div class="content">
-        <div class="img-wrap"><img class="task-img${doneCls}" src="${it.image}" alt=""/></div>${capLine}
+        ${itemPhotos(it).map(photo => `<div class="img-wrap"><img class="task-img${doneCls}" src="${photo}" alt=""/></div>`).join('')}${capLine}
       </div>
     </div>`;
     }
@@ -1759,7 +1762,7 @@ function renderDetailScreen(){
   const matchFn = item => {
     if(!q) return true;
     if(item.text && item.text.toLowerCase().includes(q)) return true;
-    if(item.image && ['image','photo','picture'].some(w=>w.includes(q))) return true;
+    if(itemPhotos(item).length && ['image','photo','picture'].some(w=>w.includes(q))) return true;
     return false;
   };
   const active = list.items.filter(i=>!i.done && matchFn(i));
@@ -1836,7 +1839,8 @@ function updateHeroSub(list){
 }
 
 function renderItemHTML(item, index, q){
-  const isImg = !!item.image;
+  const photos = itemPhotos(item);
+  const isImg = photos.length > 0;
   const rowCls = 'task-row'+(isImg?' is-image':'')+(item.done?' done-row':'');
   const isNotepad = currentTheme === 'notepad';
   const doneFill   = isNotepad ? '#F5C518' : '#34c759';
@@ -1849,10 +1853,10 @@ function renderItemHTML(item, index, q){
 
   let content='';
   if(isImg){
-    content=`<div class="img-wrapper">
-      <img class="task-img${item.done?' done':''}" src="${item.image}" alt="" onclick="openLightbox(${item.id})"/>
+    content=`<div class="item-photos">${photos.map((photo,photoIndex)=>`<div class="img-wrapper">
+      <img class="task-img${item.done?' done':''}" src="${photo}" alt="Photo ${photoIndex+1} of ${photos.length}" onclick="openLightbox(${item.id},${photoIndex})"/>
       <div class="expand-hint">tap to expand</div>
-    </div>
+    </div>`).join('')}</div>
     <input class="caption-input${item.done?' done':''}" data-id="${item.id}" value="${esc(item.text||'')}" placeholder="Add a caption…"/>`;
   } else {
     const text = esc(item.text || '');
@@ -1940,33 +1944,44 @@ function chooseItemPhoto(itemId){
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
+  input.multiple = true;
   input.onchange = () => addImageTask(input, itemId, list);
   input.click();
 }
-function addImageTask(fileInput, itemId = null, targetList = null){
-  const file=fileInput.files[0]; if(!file) return;
-  const list=targetList || activeList(); if(!list) return;
-  // Request protection from automatic browser storage eviction when supported.
+function itemPhotos(item){
+  return Array.isArray(item.images) && item.images.length ? item.images : (item.image ? [item.image] : []);
+}
+async function addImageTask(fileInput, itemId = null, targetList = null){
+  const files = Array.from(fileInput.files || []);
+  if (!files.length) return;
+  const list = targetList || activeList(); if (!list) return;
+  fileInput.value = '';
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
-  const reader=new FileReader();
-  reader.onload=ev=>{
+  try {
+    const images = await Promise.all(files.map(file => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.onabort = () => reject(new Error('Photo reading cancelled'));
+      reader.readAsDataURL(file);
+    })));
     if (!lists.includes(list)) return;
     const now = Date.now();
     if (itemId !== null) {
       const item = list.items.find(item => item.id === itemId);
       if (!item) return;
-      item.image = ev.target.result;
+      item.images = [...itemPhotos(item), ...images];
+      item.image = item.images[0];
       item.updatedAt = now;
     } else {
-      list.items.unshift({id:nextItemId++,text:'',done:false,image:ev.target.result,createdAt:now,updatedAt:now});
+      list.items.unshift({id:nextItemId++,text:'',done:false,images,image:images[0],createdAt:now,updatedAt:now});
     }
     list.updatedAt = now;
     save();
     if (activeList() === list) renderDetailScreen();
-  };
-  reader.onerror = () => alert('This photo could not be read. Please try selecting it again.');
-  reader.readAsDataURL(file);
-  fileInput.value='';
+  } catch(e) {
+    alert('The photos could not be added. Please try selecting them again.');
+  }
 }
 let selectedItemAction = null;
 function openItemActions(itemId){
@@ -1975,7 +1990,7 @@ function openItemActions(itemId){
   if (!item) return;
   selectedItemAction = {listId:list.id, itemId};
   document.getElementById('item-actions-title').textContent = item.text || 'Photo item';
-  document.getElementById('item-photo-label').textContent = item.image ? 'Change Photo' : 'Add Photo';
+  document.getElementById('item-photo-label').textContent = itemPhotos(item).length ? 'Add More Photos' : 'Add Photos';
   document.getElementById('item-actions-overlay').style.display = 'flex';
 }
 function closeItemActions(){
@@ -2020,7 +2035,7 @@ function transferItem(destinationId){
   }
   const now = Date.now();
   if (mode === 'copy') {
-    destination.items.unshift({...item, id:nextItemId++, createdAt:now, updatedAt:now});
+    destination.items.unshift({...item, images:[...itemPhotos(item)], id:nextItemId++, createdAt:now, updatedAt:now});
   } else {
     source.items = source.items.filter(candidate => candidate.id !== itemId);
     item.updatedAt = now;
@@ -2126,7 +2141,7 @@ function getDraggableIds(){
 function matchItem(item){
   const q=search.toLowerCase();
   if(item.text&&item.text.toLowerCase().includes(q)) return true;
-  if(item.image&&['image','photo','picture'].some(w=>w.includes(q))) return true;
+  if(itemPhotos(item).length&&['image','photo','picture'].some(w=>w.includes(q))) return true;
   return false;
 }
 
@@ -2230,11 +2245,11 @@ window.addEventListener('touchend',  onDragEnd);
 // ══════════════════════════════════════════
 //  LIGHTBOX
 // ══════════════════════════════════════════
-function openLightbox(itemId){
+function openLightbox(itemId, photoIndex = 0){
   const list=activeList(); if(!list) return;
   const item=list.items.find(i=>i.id===itemId);
-  if(!item||!item.image) return;
-  document.getElementById('lightbox-img').src=item.image;
+  if(!item || !itemPhotos(item)[photoIndex]) return;
+  document.getElementById('lightbox-img').src=itemPhotos(item)[photoIndex];
   document.getElementById('lightbox').classList.add('open');
 }
 function closeLightbox(e){
