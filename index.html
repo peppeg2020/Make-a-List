@@ -471,7 +471,7 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
 .sort-lists-opt.active{color:var(--accent);font-weight:600}
 .sort-lists-opt:last-child{border-bottom:none}
 /* ── Sheet utility classes ── */
-#sort-overlay > div{max-height:100%;overflow-y:auto}
+#sort-overlay > div, #sort-lists-overlay > div{max-height:100%;overflow-y:auto}
 .sheet-panel{background:var(--surface-raised);border-radius:16px;overflow:hidden;margin-bottom:10px}
 .sheet-header{padding:14px 16px 10px;text-align:center;color:var(--text-secondary);font-size:13px;font-weight:600;border-bottom:1px solid var(--divider)}
 .sheet-row{width:100%;padding:16px;background:none;border:none;border-bottom:1px solid var(--divider);cursor:pointer;color:var(--text-primary);font-size:17px;font-weight:400;display:flex;align-items:center;justify-content:center;gap:10px;font-family:var(--font-body)}
@@ -559,10 +559,12 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
   <div onclick="event.stopPropagation()" style="width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
     <div class="sheet-panel">
       <div class="sheet-header">Sort Lists</div>
-      <button onclick="setSortLists('dateAdded')" class="sort-lists-opt" id="sl-dateAdded">📅 Date Added</button>
-      <button onclick="setSortLists('dateModified')" class="sort-lists-opt" id="sl-dateModified">🕐 Date Modified</button>
-      <button onclick="setSortLists('nameAZ')" class="sort-lists-opt" id="sl-nameAZ">🔤 Name A → Z</button>
-      <button onclick="setSortLists('nameZA')" class="sort-lists-opt" id="sl-nameZA">🔤 Name Z → A</button>
+      <button onclick="setSortLists('manual')" class="sort-lists-opt" id="sl-manual">↕️ Manual Order (Default)</button>
+      <button onclick="setSortLists('dateAddedNewest')" class="sort-lists-opt" id="sl-dateAddedNewest">📅 Date Added (Newest First)</button>
+      <button onclick="setSortLists('dateAdded')" class="sort-lists-opt" id="sl-dateAdded">📅 Date Added (Oldest First)</button>
+      <button onclick="setSortLists('dateModified')" class="sort-lists-opt" id="sl-dateModified">📅 Date Modified (Newest First)</button>
+      <button onclick="setSortLists('nameAZ')" class="sort-lists-opt" id="sl-nameAZ">🔤 A → Z</button>
+      <button onclick="setSortLists('nameZA')" class="sort-lists-opt" id="sl-nameZA">🔤 Z → A</button>
     </div>
     <button onclick="closeSortListsSheet()" class="sheet-cancel">Cancel</button>
   </div>
@@ -1418,9 +1420,9 @@ function openDbxPanel(){
   renderDbxPanel();
 }
 
-const SORT_LABELS = { dateAdded:'↕ Date Added', dateModified:'↕ Date Modified', nameAZ:'↕ A → Z', nameZA:'↕ Z → A' };
+const SORT_LABELS = { manual:'↕️ Manual Order', dateAddedNewest:'📅 Date Added (Newest First)', dateAdded:'📅 Date Added (Oldest First)', dateModified:'📅 Date Modified (Newest First)', nameAZ:'🔤 A → Z', nameZA:'🔤 Z → A' };
 const savedListsSort = localStorage.getItem('lists_sort');
-let listsSort = Object.hasOwn(SORT_LABELS, savedListsSort) ? savedListsSort : 'dateAdded';
+let listsSort = Object.hasOwn(SORT_LABELS, savedListsSort) ? savedListsSort : 'manual';
 
 function openListsMenu(){ document.getElementById('lists-menu-overlay').style.display='block'; }
 function closeListsMenu(){ document.getElementById('lists-menu-overlay').style.display='none'; }
@@ -1428,7 +1430,7 @@ function closeListsMenu(){ document.getElementById('lists-menu-overlay').style.d
 function openSortListsSheet(){
   document.getElementById('sort-lists-overlay').style.display='flex';
   // Highlight current
-  ['dateAdded','dateModified','nameAZ','nameZA'].forEach(k=>{
+  Object.keys(SORT_LABELS).forEach(k=>{
     document.getElementById('sl-'+k).classList.toggle('active', listsSort===k);
   });
 }
@@ -1444,6 +1446,7 @@ function renderListsScreen() {
   // Sort
   let sorted = [...lists];
   if      (listsSort==='dateAdded')    sorted.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+  else if (listsSort==='dateAddedNewest') sorted.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0) || b.id-a.id);
   else if (listsSort==='dateModified') sorted.sort((a,b)=>(b.updatedAt||b.createdAt||0)-(a.updatedAt||a.createdAt||0));
   else if (listsSort==='nameAZ')       sorted.sort((a,b)=>a.name.localeCompare(b.name));
   else if (listsSort==='nameZA')       sorted.sort((a,b)=>b.name.localeCompare(a.name));
