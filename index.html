@@ -396,9 +396,9 @@ input::placeholder,.task-edit-input::placeholder{color:var(--text-tertiary)}
 .task-row.is-image .check-btn{margin-top:2px}
 
 .task-content{flex:1;min-width:0}
-.item-transfer-actions{display:flex;gap:20px}
-.item-transfer-actions button{min-height:36px;padding:6px 0;background:none;border:none;color:var(--text-secondary);font:inherit;font-size:12px;cursor:pointer}
-.item-photo-btn{display:block;min-height:36px;margin-top:4px;padding:6px 0;background:none;border:none;color:var(--text-secondary);font:inherit;font-size:12px;cursor:pointer}
+.item-more-btn{flex-shrink:0;align-self:flex-start;width:36px;min-height:44px;padding:0;background:none;border:none;color:var(--text-secondary);font-size:20px;cursor:pointer}
+#item-actions-overlay .sheet-row{justify-content:flex-start;padding:18px 24px;gap:16px}
+#item-actions-overlay .sheet-row svg{width:22px;height:22px;color:var(--accent);flex-shrink:0}
 .task-text{font-size:16px;color:var(--text-task);letter-spacing:-0.1px}
 .task-text.done{color:rgba(255,255,255,0.35);text-decoration:line-through}
 .task-editor{position:relative}
@@ -677,6 +677,19 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
         <button onclick="doRenameList()" style="flex:1;padding:16px;background:none;border:none;cursor:pointer;color:var(--accent);font-size:17px;font-weight:700;font-family:var(--font-body)">Save</button>
       </div>
     </div>
+  </div>
+</div>
+
+<div id="item-actions-overlay" role="dialog" aria-modal="true" aria-labelledby="item-actions-title" onclick="closeItemActions()" style="display:none;position:fixed;inset:0;z-index:700;background:var(--overlay);backdrop-filter:blur(6px);align-items:flex-end;justify-content:center">
+  <div onclick="event.stopPropagation()" style="width:100%;max-width:390px;max-height:100%;overflow-y:auto;padding:16px 16px max(24px,env(safe-area-inset-bottom))">
+    <div class="sheet-panel">
+      <div style="width:32px;height:4px;border-radius:4px;background:var(--text-tertiary);margin:12px auto 0"></div>
+      <div class="sheet-header" id="item-actions-title" style="overflow-wrap:anywhere"></div>
+      <button class="sheet-row" onclick="performItemAction('photo')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="14" rx="3"/><path d="M8 6l2-3h4l2 3"/><circle cx="12" cy="13" r="4"/></svg><span id="item-photo-label">Add Photo</span></button>
+      <button class="sheet-row" onclick="performItemAction('move')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V4h7l2 3h9v13H3V7zM8 13h8m-3-3 3 3-3 3"/></svg><span>Move to Another List</span></button>
+      <button class="sheet-row" onclick="performItemAction('copy')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg><span>Copy to Another List</span></button>
+    </div>
+    <button class="sheet-cancel" onclick="closeItemActions()">Cancel</button>
   </div>
 </div>
 
@@ -1845,8 +1858,7 @@ function renderItemHTML(item, index, q){
     const text = esc(item.text || '');
     content=`<div class="task-editor" data-text="${text}"><textarea class="task-edit-input${item.done?' done':''}" data-id="${item.id}"
       rows="1" placeholder="Item…" ${item.done ? 'readonly' : ''}>
-${text}</textarea></div>
-    <button class="item-photo-btn" onclick="event.stopPropagation();chooseItemPhoto(${item.id})" ontouchstart="event.stopPropagation()">📷 Add Photo</button>`;
+${text}</textarea></div>`;
   }
 
   const handle = (!item.done && !search)
@@ -1860,12 +1872,8 @@ ${text}</textarea></div>
     <div class="item-del-bg" id="idb-${item.id}"><span>Delete</span></div>
     <div class="${rowCls}" id="task-${item.id}" data-id="${item.id}">
       <button class="check-btn" onclick="toggleItem(${item.id})">${checkSVG}</button>
-      <div class="task-content">${content}
-        <div class="item-transfer-actions" ontouchstart="event.stopPropagation()">
-          <button onclick="event.stopPropagation();openTransferSheet(${item.id},'move')">Move</button>
-          <button onclick="event.stopPropagation();openTransferSheet(${item.id},'copy')">Copy</button>
-        </div>
-      </div>
+      <div class="task-content">${content}</div>
+      <button class="item-more-btn" aria-label="Item actions" onclick="event.stopPropagation();openItemActions(${item.id})" ontouchstart="event.stopPropagation()">•••</button>
       ${handle}
     </div>
   </div>`;
@@ -1960,6 +1968,29 @@ function addImageTask(fileInput, itemId = null, targetList = null){
   reader.readAsDataURL(file);
   fileInput.value='';
 }
+let selectedItemAction = null;
+function openItemActions(itemId){
+  const list = activeList();
+  const item = list && list.items.find(item => item.id === itemId);
+  if (!item) return;
+  selectedItemAction = {listId:list.id, itemId};
+  document.getElementById('item-actions-title').textContent = item.text || 'Photo item';
+  document.getElementById('item-photo-label').textContent = item.image ? 'Change Photo' : 'Add Photo';
+  document.getElementById('item-actions-overlay').style.display = 'flex';
+}
+function closeItemActions(){
+  document.getElementById('item-actions-overlay').style.display = 'none';
+  selectedItemAction = null;
+}
+function performItemAction(action){
+  const selected = selectedItemAction;
+  closeItemActions();
+  const list = activeList();
+  if (!selected || !list || list.id !== selected.listId || !list.items.some(item => item.id === selected.itemId)) return;
+  if (action === 'photo') chooseItemPhoto(selected.itemId);
+  else if (action === 'move' || action === 'copy') openTransferSheet(selected.itemId, action);
+}
+
 let pendingTransfer = null;
 function openTransferSheet(itemId, mode){
   const source = activeList();
