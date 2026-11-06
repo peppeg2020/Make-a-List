@@ -396,6 +396,7 @@ input::placeholder,.task-edit-input::placeholder{color:var(--text-tertiary)}
 .task-row.is-image .check-btn{margin-top:2px}
 
 .task-content{flex:1;min-width:0}
+.item-photo-btn{display:block;min-height:36px;margin-top:4px;padding:6px 0;background:none;border:none;color:var(--text-secondary);font:inherit;font-size:12px;cursor:pointer}
 .task-text{font-size:16px;color:var(--text-task);letter-spacing:-0.1px}
 .task-text.done{color:rgba(255,255,255,0.35);text-decoration:line-through}
 .task-editor{position:relative}
@@ -1835,7 +1836,8 @@ function renderItemHTML(item, index, q){
     const text = esc(item.text || '');
     content=`<div class="task-editor" data-text="${text}"><textarea class="task-edit-input${item.done?' done':''}" data-id="${item.id}"
       rows="1" placeholder="Item…" ${item.done ? 'readonly' : ''}>
-${text}</textarea></div>`;
+${text}</textarea></div>
+    <button class="item-photo-btn" onclick="event.stopPropagation();chooseItemPhoto(${item.id})" ontouchstart="event.stopPropagation()">📷 Add Photo</button>`;
   }
 
   const handle = (!item.done && !search)
@@ -1910,17 +1912,35 @@ function clearSearch(){
 }
 function commitSmartInput(){ addTextTask(); }
 function clearSmartInput(){ clearSearch(); }
-function addImageTask(fileInput){
+function chooseItemPhoto(itemId){
+  const list = activeList();
+  if (!list || !list.items.some(item => item.id === itemId)) return;
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = () => addImageTask(input, itemId, list);
+  input.click();
+}
+function addImageTask(fileInput, itemId = null, targetList = null){
   const file=fileInput.files[0]; if(!file) return;
-  const list=activeList(); if(!list) return;
+  const list=targetList || activeList(); if(!list) return;
   // Request protection from automatic browser storage eviction when supported.
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{});
   const reader=new FileReader();
   reader.onload=ev=>{
     if (!lists.includes(list)) return;
     const now = Date.now();
-    list.items.unshift({id:nextItemId++,text:'',done:false,image:ev.target.result,createdAt:now,updatedAt:now});
-    save(); renderDetailScreen();
+    if (itemId !== null) {
+      const item = list.items.find(item => item.id === itemId);
+      if (!item) return;
+      item.image = ev.target.result;
+      item.updatedAt = now;
+    } else {
+      list.items.unshift({id:nextItemId++,text:'',done:false,image:ev.target.result,createdAt:now,updatedAt:now});
+    }
+    list.updatedAt = now;
+    save();
+    if (activeList() === list) renderDetailScreen();
   };
   reader.onerror = () => alert('This photo could not be read. Please try selecting it again.');
   reader.readAsDataURL(file);
