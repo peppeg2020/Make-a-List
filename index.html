@@ -1466,9 +1466,6 @@ const sl = document.getElementById('sort-label');
   }
 
   con.innerHTML = filtered.map(l => {
-    const remaining = l.items.filter(i=>!i.done).length;
-    const total = l.items.length;
-    const countStr = total === 0 ? 'Empty' : remaining + ' of ' + total + ' remaining';
     const lastModified = l.updatedAt || l.createdAt;
     const dateStr = lastModified ? new Date(lastModified).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '';
     return `
@@ -1480,7 +1477,7 @@ const sl = document.getElementById('sort-label');
         <div class="list-card-icon" style="background:var(--pill-bg)">${esc(l.icon)}</div>
         <div class="list-card-info">
           <div class="list-card-name">${esc(l.name)}</div>
-          <div class="list-card-count">${countStr}${dateStr ? ' · ' + dateStr : ''}</div>
+          <div class="list-card-count">${dateStr}</div>
         </div>
         <div class="list-card-chevron">›</div>
       </div>
