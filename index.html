@@ -495,6 +495,44 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
 .add-item-input{flex:1;min-width:0;background:var(--surface);border:1.5px solid var(--pill-border);border-radius:12px;padding:12px 16px;color:var(--text-primary);font-size:15px;outline:none;font-family:var(--font-body)}
 .add-item-btn{flex-shrink:0;width:44px;height:44px;border-radius:12px;border:none;cursor:pointer;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:22px;color:#fff;font-weight:300}
 .sort-lists-opt:last-child{border-bottom:none}
+
+/* Apple IOS Style */
+[data-theme="apple-ios"]{
+  --bg:#F2F2F7;--surface:#fff;--surface-border:#E5E5EA;
+  --surface-raised:#fff;--panel-bg:#F2F2F7;
+  --text-heading:#000;--text-list-name:#1C1C1E;--text-primary:#1C1C1E;
+  --text-secondary:#6C6C70;--text-tertiary:#8E8E93;--text-task:#1C1C1E;
+  --text-caption:#6C6C70;--text-section:#6C6C70;--title-shadow:none;
+  --accent:#007AFF;--accent-gradient:#007AFF;--accent-dim:#E5F1FF;
+  --accent-border:#B8D9FF;--accent-shadow:transparent;--accent-text:#007AFF;
+  --back-btn-color:#007AFF;--pill-bg:#fff;--pill-border:#E5E5EA;
+  --delete:#FF3B30;--divider:#E5E5EA;--overlay:rgba(0,0,0,.3);
+  --drop-line:#007AFF;--mark-bg:#D6E9FF;
+  --connected-bg:#E8F8EC;--connected-border:#B8E8C4;--connected-text:#248A3D;
+  --error-bg:#FFF0EF;--error-border:#FFC5C0;--error-text:#C9342A;
+  --warn-bg:#FFF5E5;--warn-border:#FFD89C;--warn-text:#995900;
+  --font-body:-apple-system,BlinkMacSystemFont,'SF Pro Text',sans-serif;
+  color-scheme:light;
+}
+[data-theme="apple-ios"] #lists-screen .list-hero h1{font-size:34px;color:#000;letter-spacing:-1px}
+[data-theme="apple-ios"] #detail-screen .list-hero h1{font-size:34px;color:#007AFF;letter-spacing:-1px}
+[data-theme="apple-ios"] .search-icon-btn,[data-theme="apple-ios"] .theme-picker-btn,[data-theme="apple-ios"] .more-btn{color:#007AFF;background:transparent;border-color:transparent}
+[data-theme="apple-ios"] #new-list-btn{background:transparent;box-shadow:none;border:0;color:#007AFF;justify-content:flex-start;padding-left:4px}
+[data-theme="apple-ios"] #lists-container{border-radius:16px;overflow:hidden}
+[data-theme="apple-ios"] #lists-container .list-card{border:0;border-bottom:1px solid #E5E5EA;border-radius:0;margin-bottom:0;box-shadow:none}
+[data-theme="apple-ios"] .list-card-icon{border-radius:50%;background:#E5F1FF!important}
+[data-theme="apple-ios"] .list-card:active{background:#E5E5EA}
+[data-theme="apple-ios"] .task-row{box-shadow:none;border-color:transparent;background:#fff}
+[data-theme="apple-ios"] .done-row{background:#fff!important}
+[data-theme="apple-ios"] .task-edit-input.done,[data-theme="apple-ios"] .task-text.done,[data-theme="apple-ios"] .caption-input.done{color:#8E8E93}
+[data-theme="apple-ios"] .tip{color:#6C6C70}
+[data-theme="apple-ios"] .search-clear{background:#E5E5EA;color:#3A3A3C}
+[data-theme="apple-ios"] .modal-handle,[data-theme="apple-ios"] .dbx-handle{background:#C7C7CC}
+[data-theme="apple-ios"] .modal-field{background:#fff;color:#1C1C1E;border-color:#D1D1D6}
+[data-theme="apple-ios"] .modal-field::placeholder{color:#8E8E93}
+[data-theme="apple-ios"] .modal-cancel-btn{color:#007AFF}
+[data-theme="apple-ios"] #new-list-sheet div[style*="color:rgba(255"]{color:#6C6C70!important}
+[data-theme="apple-ios"] .sheet-cancel{color:#007AFF}
 </style>
 </head>
 <body>
@@ -773,6 +811,10 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
       <button onclick="applyTheme('notepad')" class="theme-row" id="theme-row-notepad">
         <span>📒 Notepad</span>
         <span class="theme-check" id="theme-check-notepad" style="display:none">✓</span>
+      </button>
+      <button onclick="applyTheme('apple-ios')" class="theme-row" id="theme-row-apple-ios">
+        <span>☑️ Apple IOS Style</span>
+        <span class="theme-check" id="theme-check-apple-ios" style="display:none">✓</span>
       </button>
     </div>
     <button onclick="closeThemePicker()" class="sheet-cancel">Done</button>
@@ -1925,7 +1967,7 @@ function renderItemHTML(item, index, q){
   const isImg = photos.length > 0;
   const rowCls = 'task-row'+(isImg?' is-image':'')+(item.done?' done-row':'');
   const isNotepad = currentTheme === 'notepad';
-  const doneFill   = isNotepad ? '#F5C518' : '#34c759';
+  const doneFill   = isNotepad ? '#F5C518' : currentTheme === 'apple-ios' ? '#007AFF' : '#34c759';
   const doneBorder = isNotepad ? '#E8B800' : '#fff';
   const doneCheck  = isNotepad ? '#1C1C1E' : '#fff';
   const stroke = item.done ? doneBorder : '#c7c7cc';
@@ -2952,7 +2994,7 @@ function renderDbxPanel(){
 // ══════════════════════════════════════════
 //  THEME
 // ══════════════════════════════════════════
-const THEMES = ['classic', 'retro', 'notepad'];
+const THEMES = ['classic', 'retro', 'notepad', 'apple-ios'];
 let currentTheme = localStorage.getItem('app_theme') || 'classic';
 
 function applyTheme(id) {
@@ -2965,6 +3007,7 @@ function applyTheme(id) {
     document.documentElement.dataset.theme = id;
   }
   updateThemeChecks();
+  if (activeList()) renderDetailScreen();
 }
 
 function updateThemeChecks() {
