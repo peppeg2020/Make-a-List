@@ -548,12 +548,24 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
   </div>
 </div>
 
+<div id="recently-deleted-screen" class="screen hidden" style="position:fixed;inset:0;z-index:550;background:var(--bg)">
+  <div class="navbar"><button class="back-btn" onclick="closeRecentlyDeleted()">‹ Lists</button></div>
+  <div class="list-hero"><h1>Recently Deleted</h1><p class="sub">Lists stay here for 30 days.</p></div>
+  <div id="deleted-lists-container" style="flex:1;overflow-y:auto;padding:8px 20px"></div>
+  <p style="padding:16px 24px max(24px,env(safe-area-inset-bottom));font-size:13px;text-align:center;color:var(--text-secondary)">Restoring brings back items and photos.</p>
+</div>
+<div id="delete-undo" role="status" style="display:none;position:fixed;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);left:20px;right:20px;z-index:800;background:#292724;color:white;padding:14px 18px;border-radius:16px;box-shadow:0 6px 24px #0003;align-items:center;gap:12px">
+  <span id="delete-undo-label" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
+  <button onclick="undoListDeletion()" style="border:0;background:none;color:#f5c518;font:600 17px var(--font-body);min-height:44px;padding:0 8px">Undo</button>
+</div>
+
 <!-- Lists screen ••• menu -->
 <div id="lists-menu-overlay" onclick="closeListsMenu()" style="display:none;position:fixed;inset:0;z-index:600;background:var(--overlay);backdrop-filter:blur(4px);animation:fadeIn 0.15s ease">
   <div id="lists-menu-sheet" onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:390px;padding:0 16px max(24px,env(safe-area-inset-bottom));animation:slideUp 0.2s ease">
     <div class="sheet-panel">
       <div class="sheet-header">Options</div>
       <button onclick="closeListsMenu();openSortListsSheet();" class="sheet-row">↕️ Sort Lists</button>
+      <button onclick="openRecentlyDeleted()" class="sheet-row">🗑️ Recently Deleted</button>
     </div>
     <button onclick="closeListsMenu()" class="sheet-cancel">Cancel</button>
   </div>
@@ -729,7 +741,7 @@ mark{background:var(--mark-bg);color:var(--text-primary);border-radius:3px;paddi
     <div class="sheet-panel" style="text-align:center">
       <div style="padding:20px 16px 4px;color:var(--text-primary);font-size:17px;font-weight:700">Delete List?</div>
       <div style="padding:4px 16px 20px;color:var(--text-secondary);font-size:14px">
-        "<span id="confirm-list-name"></span>" will be permanently deleted. This cannot be undone.
+        "<span id="confirm-list-name"></span>" will move to Recently Deleted. You can restore it within 30 days.
       </div>
       <div style="border-top:1px solid var(--divider);display:flex">
         <button onclick="document.getElementById('confirm-delete-overlay').style.display='none'" style="flex:1;padding:16px;background:none;border:none;border-right:1px solid var(--divider);cursor:pointer;color:var(--accent);font-size:17px;font-weight:400;font-family:var(--font-body)">Cancel</button>
@@ -815,6 +827,8 @@ let gdriveRefreshPromise = null;
 // ══════════════════════════════════════════
 // lists: [{ id, name, icon, items:[{id,text,done,image}] }]
 let lists    = [];
+let deletedLists = [];
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 let nextListId = 1;
 let nextItemId = 1;
 let activeListId = null;  // which list is open
@@ -1103,7 +1117,7 @@ async function _cloudHasAnythingToProtect() {
       });
       if (res.ok) {
         const data = await res.json();
-        if (data && Array.isArray(data.lists) && data.lists.length > 0) return true;
+        if (data && ((Array.isArray(data.lists) && data.lists.length > 0) || (Array.isArray(data.deletedLists) && data.deletedLists.length > 0))) return true;
         // Cloud master exists but is empty — nothing to protect on this provider.
       } else if (res.status !== 409) {
         // 409 = path/not_found (no master yet, safe). Anything else is inconclusive.
@@ -1117,7 +1131,7 @@ async function _cloudHasAnythingToProtect() {
     try {
       await _ensureGDriveToken();
       const data = await _withGDriveAuth(() => gdriveDownload(gdriveToken));
-      if (data && Array.isArray(data.lists) && data.lists.length > 0) return true;
+      if (data && ((Array.isArray(data.lists) && data.lists.length > 0) || (Array.isArray(data.deletedLists) && data.deletedLists.length > 0))) return true;
     } catch (e) {
       if (!e || !e.message || !e.message.includes('not_found')) {
         return true;
@@ -1128,12 +1142,13 @@ async function _cloudHasAnythingToProtect() {
 }
 
 async function _attemptAutoBackup() {
+  pruneDeletedLists();
   // Safety guard: never let a timer-fired auto-backup replace a non-empty
   // cloud master JSON with an empty local state. Manual Save buttons bypass
   // this — those represent explicit user intent. Only skip when at least one
   // provider is connected AND we can verify (or must fail-closed on) that
   // the cloud has data we shouldn't destroy.
-  if (lists.length === 0 && (dbxToken || gdriveToken)) {
+  if (lists.length === 0 && deletedLists.length === 0 && (dbxToken || gdriveToken)) {
     if (await _cloudHasAnythingToProtect()) {
       console.warn('[auto-backup] blocked: local lists are empty but cloud has data (or check inconclusive). Skipping to protect existing backup. Use manual Save to override.');
       return { anySaved: false, guarded: true };
@@ -1142,7 +1157,7 @@ async function _attemptAutoBackup() {
   let anySaved = false;
   if (dbxToken) {
     await _ensureDropboxToken();
-    await dbxUpload(DROPBOX_BACKUP_PATH, {lists, nextListId, nextItemId, savedAt: new Date().toISOString()});
+    await dbxUpload(DROPBOX_BACKUP_PATH, {lists, deletedLists, nextListId, nextItemId, savedAt: new Date().toISOString()});
     for (const list of lists) {
       const base = safeFilename(list.name);
       await dbxUpload(`/Lists/${base}.txt`, listToText(list), true);
@@ -1154,7 +1169,7 @@ async function _attemptAutoBackup() {
     try {
       await _ensureGDriveToken();
       await _withGDriveAuth(async () => {
-        await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+        await gdriveUpload(gdriveToken, { lists, deletedLists, nextListId, nextItemId, savedAt: new Date().toISOString() });
         for (const list of lists) {
           const base = safeFilename(list.name);
           await gdriveUploadText(gdriveToken, `${base}.txt`, listToText(list));
@@ -1272,11 +1287,12 @@ function writeListsSnapshot(snapshot) {
   });
 }
 function save() {
+  pruneDeletedLists();
   if (activeListId !== null) {
     const list = activeList();
     if (list) list.updatedAt = Date.now();
   }
-  const snapshot = {lists,nextListId,nextItemId};
+  const snapshot = {lists,deletedLists,nextListId,nextItemId};
   if (listsDatabase) {
     // put clones immediately; transactions commit in creation order.
     writeListsSnapshot(snapshot).then(() => {
@@ -1310,10 +1326,12 @@ async function load() {
   }
   if (data && !Array.isArray(data.lists)) throw new Error('Invalid saved lists');
   lists = data ? data.lists : JSON.parse(JSON.stringify(DEFAULT_LISTS));
+  deletedLists = data && Array.isArray(data.deletedLists) ? data.deletedLists : [];
+  pruneDeletedLists();
   nextListId = data ? (data.nextListId || 100) : 3;
   nextItemId = data ? (data.nextItemId || 100) : 10;
   if (listsDatabase) {
-    await writeListsSnapshot({lists,nextListId,nextItemId});
+    await writeListsSnapshot({lists,deletedLists,nextListId,nextItemId});
     // Remove the old copy only after the full snapshot is safely committed.
     try { localStorage.removeItem('mylists_data'); } catch(e) {}
   }
@@ -1646,9 +1664,73 @@ document.addEventListener('click', e => {
   deleteListById(id);
 });
 
+let undoDeletedListId = null;
+let deleteUndoTimer = null;
+function pruneDeletedLists(){
+  const cutoff = Date.now() - TRASH_RETENTION_MS;
+  deletedLists = deletedLists.filter(entry => entry && entry.list && Number.isFinite(entry.deletedAt) && entry.deletedAt > cutoff);
+}
+function hideDeleteUndo(){
+  clearTimeout(deleteUndoTimer);
+  undoDeletedListId = null;
+  document.getElementById('delete-undo').style.display = 'none';
+}
 function deleteList(id){
-  lists = lists.filter(l=>l.id!==id);
+  const index = lists.findIndex(list => list.id === id);
+  if (index < 0) return;
+  const [list] = lists.splice(index, 1);
+  deletedLists.push({list, deletedAt:Date.now(), originalIndex:index});
   save(); renderListsScreen();
+  clearTimeout(deleteUndoTimer);
+  undoDeletedListId = id;
+  document.getElementById('delete-undo-label').textContent = `“${list.name}” deleted`;
+  document.getElementById('delete-undo').style.display = 'flex';
+  deleteUndoTimer = setTimeout(hideDeleteUndo, 10000);
+}
+function undoListDeletion(){
+  if (undoDeletedListId !== null) restoreDeletedList(undoDeletedListId);
+}
+function restoreDeletedList(id){
+  pruneDeletedLists();
+  const index = deletedLists.findIndex(entry => entry.list.id === id);
+  if (index < 0) { hideDeleteUndo(); renderDeletedLists(); return; }
+  const [entry] = deletedLists.splice(index, 1);
+  const list = entry.list;
+  nextListId = Math.max(nextListId, ...lists.map(existing => existing.id + 1));
+  nextItemId = Math.max(nextItemId, ...lists.flatMap(existing => existing.items.map(item => item.id + 1)));
+  // Avoid collisions if an older backup reused an identifier.
+  if (lists.some(existing => existing.id === list.id)) list.id = nextListId++;
+  const usedIds = new Set(lists.flatMap(existing => existing.items.map(item => item.id)));
+  list.items.forEach(item => {
+    if (usedIds.has(item.id)) item.id = nextItemId++;
+    usedIds.add(item.id);
+    nextItemId = Math.max(nextItemId, item.id + 1);
+  });
+  nextListId = Math.max(nextListId, list.id + 1);
+  list.updatedAt = Date.now();
+  lists.splice(Math.min(entry.originalIndex || 0, lists.length), 0, list);
+  hideDeleteUndo();
+  save(); renderListsScreen(); renderDeletedLists();
+}
+function renderDeletedLists(){
+  pruneDeletedLists();
+  const entries = [...deletedLists].sort((a,b) => b.deletedAt-a.deletedAt);
+  document.getElementById('deleted-lists-container').innerHTML = entries.length ? entries.map(entry => {
+    const days = Math.ceil((entry.deletedAt + TRASH_RETENTION_MS - Date.now()) / 86400000);
+    return `<div class="list-card" style="margin-bottom:12px;cursor:default">
+      <div class="list-card-icon">${esc(entry.list.icon)}</div>
+      <div class="list-card-info"><div class="list-card-name">${esc(entry.list.name)}</div><div class="list-card-count">${days} ${days === 1 ? 'day' : 'days'} left</div></div>
+      <button onclick="restoreDeletedList(${entry.list.id})" style="flex-shrink:0;min-height:44px;padding:10px 14px;border:0;border-radius:12px;background:var(--accent);color:#1c1c1e;font:600 14px var(--font-body)">Restore</button>
+    </div>`;
+  }).join('') : '<div class="empty">No recently deleted lists.</div>';
+}
+function openRecentlyDeleted(){
+  closeListsMenu();
+  renderDeletedLists();
+  document.getElementById('recently-deleted-screen').classList.remove('hidden');
+}
+function closeRecentlyDeleted(){
+  document.getElementById('recently-deleted-screen').classList.add('hidden');
 }
 
 function openListMenu(){
@@ -2534,7 +2616,7 @@ async function gdriveUploadText(token, filename, text) {
 async function handleGDriveSave() {
   gdriveStatus = 'saving'; gdriveMessage = 'Saving to Google Drive…'; renderDbxPanel();
   const doSave = async () => {
-    await gdriveUpload(gdriveToken, { lists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+    await gdriveUpload(gdriveToken, { lists, deletedLists, nextListId, nextItemId, savedAt: new Date().toISOString() });
     for (const list of lists) {
       const base = safeFilename(list.name);
       await gdriveUploadText(gdriveToken, `${base}.txt`, listToText(list));
@@ -2570,6 +2652,7 @@ async function handleGDriveRestore() {
         return;
       }
       lists = data.lists;
+      deletedLists = Array.isArray(data.deletedLists) ? data.deletedLists : [];
       nextListId = data.nextListId || 100;
       nextItemId = data.nextItemId || 100;
       save(); renderListsScreen();
@@ -2733,7 +2816,7 @@ async function handleBackup(){
   try{
     await _ensureDropboxToken();
     // 1. Save machine-readable restore file
-    await dbxUpload(DROPBOX_BACKUP_PATH, {lists,nextListId,nextItemId,savedAt:new Date().toISOString()});
+    await dbxUpload(DROPBOX_BACKUP_PATH, {lists,deletedLists,nextListId,nextItemId,savedAt:new Date().toISOString()});
     // 2. Save each list as a readable .txt + a standalone .html in Lists/
     for(const list of lists){
       const base = safeFilename(list.name);
@@ -2774,6 +2857,7 @@ async function handleRestore(){
         renderDbxPanel();
         return;
       }
+      deletedLists=Array.isArray(data.deletedLists) ? data.deletedLists : [];
       lists=data.lists;nextListId=data.nextListId||100;nextItemId=data.nextItemId||100;
       save();
       const d=data.savedAt?new Date(data.savedAt).toLocaleDateString():'';
