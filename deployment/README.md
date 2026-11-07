@@ -64,3 +64,10 @@ server session database is unnecessary and loses renewal connections.
 - Callback URI submitted to existing OAuth client, retaining old URIs.
 - User approval requested for switching Google OAuth from Testing to Production; pending.
 - Frontend backup changes remain unpublished. Real owner consent, refresh, and backup checks still needed.
+
+## Release checkpoint
+
+- Google OAuth Production status confirmed after explicit user approval.
+- Saved third callback URI verified from Google client settings.
+- Frontend released as `88120f6`; live index and drive-connection.js match local files byte for byte.
+- One-time owner connection on the phone is still needed. End-to-end owner consent, real Drive backup and refresh have not yet been verified.
