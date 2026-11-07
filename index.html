@@ -1197,6 +1197,32 @@ async function _cloudHasAnythingToProtect() {
   return false;
 }
 
+// Keep export fingerprints only for this connection/session; full recovery JSON
+// is always uploaded. Failed exports are never marked current.
+const readableExportCache = {dropbox:new Map(), drive:new Map()};
+async function uploadReadableExports(provider, upload, force = false) {
+  const cache = readableExportCache[provider];
+  const snapshots = lists.map(list => JSON.parse(JSON.stringify(list)));
+  let cursor = 0;
+  const workers = Array.from({length:Math.min(3,snapshots.length)}, async () => {
+    while (cursor < snapshots.length) {
+      const list = snapshots[cursor++];
+      const base = safeFilename(list.name);
+      const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(list)));
+      const fingerprint = Array.from(new Uint8Array(bytes), b=>b.toString(16).padStart(2,'0')).join('');
+      for (const extension of ['txt','html']) {
+        const name = `${base}.${extension}`;
+        if (!force && cache.get(name) === fingerprint) continue;
+        await upload(name, extension === 'txt' ? listToText(list) : listToHTML(list));
+        cache.set(name, fingerprint);
+      }
+    }
+  });
+  const results = await Promise.allSettled(workers);
+  const failed = results.find(result=>result.status === 'rejected');
+  if (failed) throw failed.reason;
+}
+
 async function _attemptAutoBackup() {
   pruneDeletedLists();
   // Safety guard: never let a timer-fired auto-backup replace a non-empty
@@ -1214,11 +1240,7 @@ async function _attemptAutoBackup() {
   if (dbxToken) {
     await _ensureDropboxToken();
     await dbxUpload(DROPBOX_BACKUP_PATH, {lists, deletedLists, nextListId, nextItemId, savedAt: new Date().toISOString()});
-    for (const list of lists) {
-      const base = safeFilename(list.name);
-      await dbxUpload(`/Lists/${base}.txt`, listToText(list), true);
-      await dbxUpload(`/Lists/${base}.html`, listToHTML(list), true);
-    }
+    await uploadReadableExports('dropbox', (name, text) => dbxUpload('/Lists/'+name, text, true));
     anySaved = true;
   }
   if (gdriveToken) {
@@ -1226,11 +1248,7 @@ async function _attemptAutoBackup() {
       await _ensureGDriveToken();
       await _withGDriveAuth(async () => {
         await gdriveUpload(gdriveToken, { lists, deletedLists, nextListId, nextItemId, savedAt: new Date().toISOString() });
-        for (const list of lists) {
-          const base = safeFilename(list.name);
-          await gdriveUploadText(gdriveToken, `${base}.txt`, listToText(list));
-          await gdriveUploadText(gdriveToken, `${base}.html`, listToHTML(list));
-        }
+        await uploadReadableExports('drive', (name, text) => gdriveUploadText(gdriveToken, name, text));
       });
       gdriveNeedsReconnect = false;
       anySaved = true;
@@ -2703,11 +2721,7 @@ async function handleGDriveSave() {
   gdriveStatus = 'saving'; gdriveMessage = 'Saving to Google Drive…'; renderDbxPanel();
   const doSave = async () => {
     await gdriveUpload(gdriveToken, { lists, deletedLists, nextListId, nextItemId, savedAt: new Date().toISOString() });
-    for (const list of lists) {
-      const base = safeFilename(list.name);
-      await gdriveUploadText(gdriveToken, `${base}.txt`, listToText(list));
-      await gdriveUploadText(gdriveToken, `${base}.html`, listToHTML(list));
-    }
+    await uploadReadableExports('drive', (name, text) => gdriveUploadText(gdriveToken, name, text));
   };
   try {
     await _ensureGDriveToken();
@@ -2753,6 +2767,7 @@ async function handleGDriveRestore() {
 }
 
 async function handleGDriveDisconnect() {
+  readableExportCache.drive.clear();
   if (driveConnection.connected) {
     try { await driveConnection.disconnect(); }
     catch(e) { gdriveStatus='error';gdriveMessage=e.message;renderDbxPanel();return; }
@@ -2908,11 +2923,7 @@ async function handleBackup(){
     // 1. Save machine-readable restore file
     await dbxUpload(DROPBOX_BACKUP_PATH, {lists,deletedLists,nextListId,nextItemId,savedAt:new Date().toISOString()});
     // 2. Save each list as a readable .txt + a standalone .html in Lists/
-    for(const list of lists){
-      const base = safeFilename(list.name);
-      await dbxUpload(`/Lists/${base}.txt`, listToText(list), true);
-      await dbxUpload(`/Lists/${base}.html`, listToHTML(list), true);
-    }
+    await uploadReadableExports('dropbox', (name, text) => dbxUpload('/Lists/'+name, text, true));
     backupError = null;
     dbxStatus='saved';dbxMessage='✓ Saved to Dropbox!';
     updateBackupTimestamp();
@@ -2962,6 +2973,7 @@ async function handleRestore(){
   renderDbxPanel();
 }
 function handleDisconnect(){
+  readableExportCache.dropbox.clear();
   localStorage.removeItem('dbx_token');
   localStorage.removeItem('dbx_refresh_token');
   localStorage.removeItem('dbx_token_expiry');
