@@ -44,6 +44,7 @@
 
 <script>(function(){var t=localStorage.getItem('app_theme');if(t&&t!=='classic')document.documentElement.dataset.theme=t;})()</script>
 <script src="https://accounts.google.com/gsi/client" async></script>
+<script src="drive-connection.js"></script>
 
 <style>
 /* ── Theme variables ─────────────────────────────────────────────────────── */
@@ -1077,6 +1078,15 @@ ${body}
 }
 
 // Auto-backup timer
+let backupRevision = Number(localStorage.getItem('backup_revision') || 0);
+let backedUpRevision = Number(localStorage.getItem('backed_up_revision') || 0);
+let retryBackupTimer = null;
+let retryBackupDelay = 30000;
+function backupIsPending(){return backupRevision > backedUpRevision;}
+function resumePendingBackup(){
+  if (backupIsPending() && navigator.onLine && (dbxToken || gdriveToken) && !gdriveNeedsReconnect) scheduleAutoBackup();
+}
+
 let lastBackupTime = localStorage.getItem('last_backup_time') || null;
 
 function updateBackupTimestamp() {
@@ -1096,10 +1106,14 @@ function updateBackupButtonLabel() {
                 || gdriveStatus === 'saving'
                 || gdriveStatus === 'reconnecting';
   const isFailed = !isSaving && (!!backupError || gdriveNeedsReconnect);
-  const isRested = !isSaving && !isFailed && connected && lastBackupTime;
+  const isRested = !isSaving && !isFailed && !backupIsPending() && connected && lastBackupTime;
   let text;
   if (isSaving) {
     text = '⟳ saving…';
+  } else if (gdriveNeedsReconnect) {
+    text = 'Reconnect Google Drive';
+  } else if (backupIsPending() && !backupError) {
+    text = 'Waiting to back up';
   } else if (isFailed) {
     text = '✕ not backed up · tap to retry';
   } else if (isRested) {
@@ -1134,7 +1148,7 @@ let autoBackupRerunPending = false;
 // network flap, etc). These are worth retrying — a fresh request usually succeeds.
 function _isTransientNetworkError(e) {
   const m = (e && e.message) || '';
-  return /Load failed|NetworkError|Failed to fetch|network connection was lost|Internet connection appears to be offline|timed out|The request timed out/i.test(m);
+  return /Load failed|NetworkError|Failed to fetch|network connection was lost|Internet connection appears to be offline|temporarily unavailable|429|503|timed out|The request timed out/i.test(m);
 }
 
 // Silent Drive refresh failure — Safari ITP blocks the iframe cookie so the
@@ -1233,11 +1247,13 @@ async function _attemptAutoBackup() {
 }
 
 async function _runAutoBackup() {
+  if (!navigator.onLine) { updateBackupButtonLabel(); return; }
   // Prevent overlapping runs — the visibility-flush and the debounced timer
   // can both fire close together. If a run comes in while one is going, mark
   // it pending and re-run once at the end so we don't skip the latest state.
   if (autoBackupInFlight) { autoBackupRerunPending = true; return; }
   autoBackupInFlight = true;
+  const runRevision = backupRevision;
   updateBackupButtonLabel();
   const MAX_ATTEMPTS = 3;
   let lastErr = null;
@@ -1273,12 +1289,22 @@ async function _runAutoBackup() {
     // At least one target saved (Dropbox and/or Drive). If Drive soft-failed,
     // the pill picks that up via gdriveNeedsReconnect in updateBackupButtonLabel.
     backupError = null;
+    if (!gdriveNeedsReconnect && !autoBackupRerunPending) {
+      backedUpRevision = runRevision;
+      try { localStorage.setItem('backed_up_revision',String(backedUpRevision)); } catch(e) {}
+      retryBackupDelay = 30000;
+    }
     updateBackupTimestamp();
   } else {
     // Only case: Drive was the sole target and it needs reconnect. No hard error,
     // no timestamp update — pill goes to the soft "Reconnect Drive" state.
     backupError = null;
     updateBackupButtonLabel();
+  }
+  clearTimeout(retryBackupTimer);
+  if (lastErr && !gdriveNeedsReconnect && backupIsPending()) {
+    retryBackupTimer = setTimeout(resumePendingBackup,retryBackupDelay);
+    retryBackupDelay = Math.min(retryBackupDelay * 2,300000);
   }
   if (autoBackupRerunPending) {
     autoBackupRerunPending = false;
@@ -1287,6 +1313,7 @@ async function _runAutoBackup() {
 }
 
 function scheduleAutoBackup() {
+  updateBackupButtonLabel();
   if (!dbxToken && !gdriveToken) return; // need at least one
   clearTimeout(autoBackupTimer);
   autoBackupTimer = setTimeout(() => { autoBackupTimer = null; _runAutoBackup(); }, 3000);
@@ -1329,6 +1356,8 @@ function writeListsSnapshot(snapshot) {
   });
 }
 function save() {
+  backupRevision = Math.max(Date.now(),backupRevision + 1);
+  try { localStorage.setItem('backup_revision',String(backupRevision)); } catch(e) {}
   pruneDeletedLists();
   if (activeListId !== null) {
     const list = activeList();
@@ -2486,6 +2515,11 @@ function _initGDriveTokenClient() {
 }
 
 async function _doGDriveRefresh({ interactive = false } = {}) {
+  if (driveConnection.enabled) {
+    gdriveToken = interactive ? await driveConnection.connect() : await driveConnection.token(true);
+    gdriveTokenExpiry = driveConnection.cached.expires_at;
+    return gdriveToken;
+  }
   if (gdriveRefreshPromise) return gdriveRefreshPromise;
   let timeoutId = null;
   gdriveRefreshPromise = new Promise((resolve, reject) => {
@@ -2518,6 +2552,11 @@ async function _doGDriveRefresh({ interactive = false } = {}) {
 }
 
 async function _ensureGDriveToken() {
+  if (driveConnection.connected) {
+    gdriveToken = await driveConnection.token();
+    gdriveTokenExpiry = driveConnection.cached.expires_at;
+    return;
+  }
   if (!gdriveToken) throw new Error('Not connected to Google Drive');
   const buffer = 5 * 60 * 1000;
   if (gdriveTokenExpiry && Date.now() > gdriveTokenExpiry - buffer) {
@@ -2538,6 +2577,7 @@ async function _withGDriveAuth(fn) {
 }
 
 function startGDriveOAuth() {
+  if (driveConnection.enabled) return handleGDriveReconnect();
   const redirect = encodeURIComponent(_appBaseUrl());
   window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GDRIVE_CLIENT_ID}&redirect_uri=${redirect}&response_type=token&scope=${encodeURIComponent(GDRIVE_SCOPE)}&state=gdrive`;
 }
@@ -2580,6 +2620,7 @@ async function gdriveGetOrCreateFolder(token) {
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='Make a List' and mimeType='application/vnd.google-apps.folder' and trashed=false&fields=files(id,name)`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
+  if (!res.ok) throw new Error('Google Drive lookup failed ('+res.status+'): '+await res.text());
   const data = await res.json();
   if (data.files && data.files.length > 0) return data.files[0].id;
   // Create folder if it doesn't exist
@@ -2588,6 +2629,7 @@ async function gdriveGetOrCreateFolder(token) {
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ name: 'Make a List', mimeType: 'application/vnd.google-apps.folder' })
   });
+  if (!createRes.ok) throw new Error('Google Drive folder creation failed ('+createRes.status+'): '+await createRes.text());
   const folder = await createRes.json();
   return folder.id;
 }
@@ -2597,6 +2639,7 @@ async function gdriveGetFileId(token) {
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_BACKUP_NAME}' and '${folderId}' in parents and trashed=false&fields=files(id,name)`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
+  if (!res.ok) throw new Error('Google Drive lookup failed ('+res.status+'): '+await res.text());
   const data = await res.json();
   return data.files && data.files.length > 0 ? { fileId: data.files[0].id, folderId } : { fileId: null, folderId };
 }
@@ -2638,6 +2681,7 @@ async function gdriveUploadText(token, filename, text) {
   const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${filename}' and '${folderId}' in parents and trashed=false&fields=files(id)`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
+  if (!searchRes.ok) throw new Error('Google Drive lookup failed ('+searchRes.status+'): '+await searchRes.text());
   const searchData = await searchRes.json();
   const existingId = searchData.files && searchData.files.length > 0 ? searchData.files[0].id : null;
   const metadata = existingId ? { name: filename } : { name: filename, parents: [folderId] };
@@ -2708,7 +2752,11 @@ async function handleGDriveRestore() {
   renderDbxPanel();
 }
 
-function handleGDriveDisconnect() {
+async function handleGDriveDisconnect() {
+  if (driveConnection.connected) {
+    try { await driveConnection.disconnect(); }
+    catch(e) { gdriveStatus='error';gdriveMessage=e.message;renderDbxPanel();return; }
+  }
   localStorage.removeItem('gdrive_token');
   localStorage.removeItem('gdrive_token_expiry');
   gdriveToken = null; gdriveTokenExpiry = 0;
@@ -2952,7 +3000,7 @@ function renderDbxPanel(){
     const gMsg = gdriveMessage?`<div class="dbx-notice ${gdriveStatus==='error'?'error':'info'}">${esc(gdriveMessage)}</div>`:'';
     gHtml=`<div class="dbx-notice warning">
       <div class="ntitle">Google Drive session expired</div>
-      <div class="nbody">Safari blocks silent re-auth after long idle. Press to Sync to refresh — takes a moment, no password needed if still signed into Google.</div>
+      <div class="nbody">${driveConnection.enabled ? 'Reconnect Google Drive to resume automatic backups.' : 'Tap to reconnect Google Drive and resume backups.'}</div>
     </div>
     ${gMsg}
     <button class="primary-btn" style="background:linear-gradient(135deg,#4285f4,#34a853)" onclick="handleGDriveReconnect()" ${gBusy?'disabled':''}>${gdriveStatus==='reconnecting'?'Syncing…':'Press to Sync'}</button>
@@ -3051,15 +3099,19 @@ load().then(() => {
   showListsScreen();
   updateDbxButtons();
   _initGDriveTokenClient();
+  if (driveConnection.connected) { gdriveToken='server-session';gdriveTokenExpiry=0;updateDbxButtons(); }
   document.body.inert = false;
+  resumePendingBackup();
 }).catch(() => {
   alert('Your saved lists could not be opened. Please reload the app to try again. Your stored data has not been replaced.');
 });
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushAutoBackup();
+  else resumePendingBackup();
 });
 window.addEventListener('pagehide', flushAutoBackup);
+window.addEventListener('online', resumePendingBackup);
 </script>
 </body>
 </html>
