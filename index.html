@@ -1239,7 +1239,7 @@ async function _attemptAutoBackup() {
   let anySaved = false;
   if (dbxToken) {
     await _ensureDropboxToken();
-    await dbxUpload(DROPBOX_BACKUP_PATH, {lists, deletedLists, nextListId, nextItemId, savedAt: new Date().toISOString()});
+    await dbxUpload(DROPBOX_BACKUP_PATH, createBackupSnapshot());
     await uploadReadableExports('dropbox', (name, text) => dbxUpload('/Lists/'+name, text, true));
     anySaved = true;
   }
@@ -1247,7 +1247,7 @@ async function _attemptAutoBackup() {
     try {
       await _ensureGDriveToken();
       await _withGDriveAuth(async () => {
-        await gdriveUpload(gdriveToken, { lists, deletedLists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+        await gdriveUpload(gdriveToken, createBackupSnapshot());
         await uploadReadableExports('drive', (name, text) => gdriveUploadText(gdriveToken, name, text));
       });
       gdriveNeedsReconnect = false;
@@ -2720,7 +2720,7 @@ async function gdriveUploadText(token, filename, text) {
 async function handleGDriveSave() {
   gdriveStatus = 'saving'; gdriveMessage = 'Saving to Google Drive…'; renderDbxPanel();
   const doSave = async () => {
-    await gdriveUpload(gdriveToken, { lists, deletedLists, nextListId, nextItemId, savedAt: new Date().toISOString() });
+    await gdriveUpload(gdriveToken, createBackupSnapshot());
     await uploadReadableExports('drive', (name, text) => gdriveUploadText(gdriveToken, name, text));
   };
   try {
@@ -2739,26 +2739,76 @@ async function handleGDriveSave() {
   renderDbxPanel();
 }
 
+function createBackupSnapshot() {
+  return {format:'make-a-list',version:1,lists,deletedLists,nextListId,nextItemId,savedAt:new Date().toISOString()};
+}
+function validateBackup(data) {
+  const fail = () => { throw new Error('This backup is invalid or damaged. Your current lists have not been changed.'); };
+  if (!data || !Array.isArray(data.lists) || (data.version !== undefined && data.version !== 1) || (data.format !== undefined && data.format !== 'make-a-list')) fail();
+  if (data.deletedLists !== undefined && !Array.isArray(data.deletedLists)) fail();
+  const snapshot = JSON.parse(JSON.stringify(data));
+  snapshot.deletedLists = snapshot.deletedLists || [];
+  let maxList = 0, maxItem = 0;
+  const listIds = new Set(), itemIds = new Set();
+  const checkList = list => {
+    if (!list || !Number.isSafeInteger(list.id) || list.id < 1 || typeof list.name !== 'string' || !Array.isArray(list.items) || listIds.has(list.id)) fail();
+    listIds.add(list.id); maxList = Math.max(maxList,list.id);
+    for (const item of list.items) {
+      if (!item || !Number.isSafeInteger(item.id) || item.id < 1 || itemIds.has(item.id) || typeof item.text !== 'string' || typeof item.done !== 'boolean') fail();
+      itemIds.add(item.id); maxItem = Math.max(maxItem,item.id);
+      if (item.images !== undefined && !Array.isArray(item.images)) fail();
+      const photos = [...(item.images || []), ...(item.image ? [item.image] : [])];
+      if (photos.some(photo=>typeof photo !== 'string' || !/^data:image\/[^;,]+;base64,[A-Za-z0-9+/]+={0,2}$/.test(photo))) fail();
+    }
+  };
+  snapshot.lists.forEach(checkList);
+  snapshot.deletedLists.forEach(entry=>{
+    if (!entry || !Number.isFinite(entry.deletedAt)) fail();
+    checkList(entry.list);
+  });
+  snapshot.nextListId = Math.max(Number.isSafeInteger(data.nextListId) ? data.nextListId : 1,maxList+1);
+  snapshot.nextItemId = Math.max(Number.isSafeInteger(data.nextItemId) ? data.nextItemId : 1,maxItem+1);
+  if (!Number.isSafeInteger(snapshot.nextListId) || !Number.isSafeInteger(snapshot.nextItemId)) fail();
+  return snapshot;
+}
+async function applyRestoredBackup(data, expectedRevision) {
+  const snapshot = validateBackup(data);
+  if (backupRevision !== expectedRevision || autoBackupInFlight) throw new Error('Lists changed or a backup is still running. Wait for saving to finish, then try Restore again.');
+  if (!snapshot.lists.length && lists.length) throw new Error('The cloud backup has no active lists. Your current lists have not been changed.');
+  const previous = {lists,deletedLists,nextListId,nextItemId};
+  if (listsDatabase) {
+    await new Promise((resolve,reject)=>{
+      const tx = listsDatabase.transaction('state','readwrite');
+      const store = tx.objectStore('state');
+      store.put(previous,'before-restore');
+      store.put(snapshot,'current');
+      tx.oncomplete = resolve;
+      tx.onabort = () => reject(tx.error || new Error('Restore could not be saved on this device.'));
+      tx.onerror = () => {};
+    });
+  } else {
+    localStorage.setItem('mylists_before_restore',JSON.stringify(previous));
+    localStorage.setItem('mylists_data',JSON.stringify(snapshot));
+  }
+  lists=snapshot.lists; deletedLists=snapshot.deletedLists;
+  nextListId=snapshot.nextListId; nextItemId=snapshot.nextItemId;
+  activeListId=null;
+  readableExportCache.drive.clear(); readableExportCache.dropbox.clear();
+  backupRevision=Math.max(Date.now(),backupRevision+1);
+  try { localStorage.setItem('backup_revision',String(backupRevision)); } catch(e) {}
+  scheduleAutoBackup();
+}
+
 async function handleGDriveRestore() {
+  const restoreRevision = backupRevision;
   gdriveStatus = 'restoring'; gdriveMessage = 'Restoring from Google Drive…'; renderDbxPanel();
   try {
     await _ensureGDriveToken();
     const data = await _withGDriveAuth(() => gdriveDownload(gdriveToken));
-    if (data && Array.isArray(data.lists)) {
-      if (data.lists.length === 0 && lists.length > 0) {
-        gdriveStatus = 'error';
-        gdriveMessage = `Cloud backup is empty (0 lists) but local has ${lists.length}. Refusing to overwrite — delete lists in the app first if you actually want to reset.`;
-        renderDbxPanel();
-        return;
-      }
-      lists = data.lists;
-      deletedLists = Array.isArray(data.deletedLists) ? data.deletedLists : [];
-      nextListId = data.nextListId || 100;
-      nextItemId = data.nextItemId || 100;
-      save(); renderListsScreen();
-      gdriveStatus = 'saved'; gdriveMessage = `✓ Restored ${data.lists.length} lists`;
-      setTimeout(() => { gdriveStatus = null; gdriveMessage = ''; renderDbxPanel(); }, 4000);
-    }
+    await applyRestoredBackup(data, restoreRevision);
+    renderListsScreen();
+    gdriveStatus = 'saved'; gdriveMessage = `✓ Restored ${lists.length} lists`;
+    setTimeout(() => { gdriveStatus = null; gdriveMessage = ''; renderDbxPanel(); }, 4000);
   } catch(e) {
     gdriveStatus = 'error';
     gdriveMessage = /reconnect/i.test(e.message) ? e.message : (e.message.includes('not_found') ? 'No backup found in Google Drive yet.' : 'Error: ' + e.message);
@@ -2921,7 +2971,7 @@ async function handleBackup(){
   try{
     await _ensureDropboxToken();
     // 1. Save machine-readable restore file
-    await dbxUpload(DROPBOX_BACKUP_PATH, {lists,deletedLists,nextListId,nextItemId,savedAt:new Date().toISOString()});
+    await dbxUpload(DROPBOX_BACKUP_PATH, createBackupSnapshot());
     // 2. Save each list as a readable .txt + a standalone .html in Lists/
     await uploadReadableExports('dropbox', (name, text) => dbxUpload('/Lists/'+name, text, true));
     backupError = null;
@@ -2937,6 +2987,7 @@ async function handleBackup(){
   renderDbxPanel();
 }
 async function handleRestore(){
+  const restoreRevision = backupRevision;
   dbxStatus='restoring';dbxMessage='Restoring from Dropbox…';renderDbxPanel();
   try{
     await _ensureDropboxToken();
@@ -2951,21 +3002,10 @@ async function handleRestore(){
     }
     if(!res.ok) throw new Error(await res.text());
     const data=await res.json();
-    if(data && Array.isArray(data.lists)){
-      if (data.lists.length === 0 && lists.length > 0) {
-        dbxStatus = 'error';
-        dbxMessage = `Cloud backup is empty (0 lists) but local has ${lists.length}. Refusing to overwrite — delete lists in the app first if you actually want to reset.`;
-        renderDbxPanel();
-        return;
-      }
-      deletedLists=Array.isArray(data.deletedLists) ? data.deletedLists : [];
-      lists=data.lists;nextListId=data.nextListId||100;nextItemId=data.nextItemId||100;
-      save();
-      const d=data.savedAt?new Date(data.savedAt).toLocaleDateString():'';
-      dbxStatus='saved';dbxMessage=`✓ Restored ${lists.length} lists${d?' (saved '+d+')':''}`;
-      setTimeout(()=>{dbxStatus=null;dbxMessage='';renderDbxPanel();},4000);
-      renderDetailScreen(); renderListsScreen();
-    }
+    await applyRestoredBackup(data, restoreRevision);
+    dbxStatus='saved';dbxMessage=`✓ Restored ${lists.length} lists`;
+    setTimeout(()=>{dbxStatus=null;dbxMessage='';renderDbxPanel();},4000);
+    renderListsScreen();
   }catch(err){
     dbxStatus='error';
     dbxMessage=/reconnect/i.test(err.message) ? err.message : (err.message.includes('not_found')?'No backup found yet.':'Error: '+err.message);
